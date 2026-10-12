@@ -7,7 +7,7 @@ const Osm = {
       "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link",
    ]),
 
-   UNITS_PER_METER: 10, // roads are 100 units = 10 m wide
+   UNITS_PER_METER: 10, // 10 world units = 1 m (roads are 140 units = 14 m wide)
 
    // Flat-earth projection around (lat0, lon0); fine for a few kilometers
    projection(lat0, lon0) {

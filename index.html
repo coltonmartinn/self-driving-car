@@ -152,7 +152,12 @@
          info = JSON.parse(localStorage.getItem("world"));
       } catch (e) {}
       if (info && info.graph && info.graph.segments.length > 0) {
-         setWorld(World.load(info));
+         const saved = World.load(info);
+         setWorld(saved);
+         if (saved.roadWidthChanged && saved.source == "osm" && saved.place) {
+            // saved by an older version with narrower roads: rebuild it
+            loadPlace(saved.place);
+         }
       } else {
          setWorld(new World(new Graph()));
          welcome.style.display = "flex";

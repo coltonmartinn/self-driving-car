@@ -1,7 +1,7 @@
 class World {
    constructor(
       graph,
-      roadWidth = 100,
+      roadWidth = 140, // 14 m: roomy enough for the learning cars
       roadRoundness = 10,
       buildingWidth = 150,
       buildingMinLength = 150,
@@ -46,7 +46,6 @@ class World {
       const world = new World(new Graph());
       world.graph = Graph.load(info.graph);
       for (const key of [
-         "roadWidth",
          "roadRoundness",
          "buildingWidth",
          "buildingMinLength",
@@ -68,7 +67,11 @@ class World {
       if (info.buildings) {
          world.buildings = info.buildings.map((b) => Building.load(b));
          world.trees = (info.trees || []).map((t) => Tree.load(t));
-      } else {
+      }
+      // saved with a different road width (older version): refit buildings/trees
+      world.roadWidthChanged =
+         info.roadWidth !== undefined && info.roadWidth != world.roadWidth;
+      if (!info.buildings || world.roadWidthChanged) {
          world.generateItems();
       }
       return world;
@@ -102,10 +105,35 @@ class World {
       this.envelopes = this.graph.segments.map(
          (seg) => new Envelope(seg, this.roadWidth, this.roadRoundness)
       );
+      this.culDeSacs = this.#findCulDeSacs();
+      for (const center of this.culDeSacs) {
+         this.envelopes.push(Envelope.circle(center, this.getCulDeSacRadius()));
+      }
       this.roadBorders = Polygon.union(this.envelopes.map((e) => e.poly));
       this.laneGuides = null;
       this.lightGroups = null;
       this.#computeIntersections();
+   }
+
+   getCulDeSacRadius() {
+      return this.roadWidth * 1.25;
+   }
+
+   // Dead ends get a round turnaround bulb, unless they're a tiny stub right
+   // next to an intersection (the bulb would just swallow the junction)
+   #findCulDeSacs() {
+      const degree = new Map();
+      for (const seg of this.graph.segments) {
+         degree.set(seg.p1, (degree.get(seg.p1) || 0) + 1);
+         degree.set(seg.p2, (degree.get(seg.p2) || 0) + 1);
+      }
+      const junctions = this.graph.points.filter((p) => degree.get(p) >= 3);
+      const minDistance = this.getCulDeSacRadius() * 1.6;
+      return this.graph.points.filter(
+         (p) =>
+            degree.get(p) == 1 &&
+            !getNearestPoint(p, junctions, minDistance)
+      );
    }
 
    generateItems() {
@@ -136,7 +164,7 @@ class World {
       return grid;
    }
 
-   // Our roads are a fixed 10 m wide, so some real buildings on narrow
+   // Our roads are a fixed 14 m wide, so some real buildings on narrow
    // streets would stick into the road. Drop those.
    #removeBuildingsOnRoads(buildings) {
       const grid = this.#indexEnvelopes();
@@ -163,6 +191,15 @@ class World {
                seg,
                this.roadWidth + this.buildingWidth + this.spacing * 2,
                this.roadRoundness
+            )
+         );
+      }
+      // wrap houses around the cul-de-sac bulbs too
+      for (const center of this.culDeSacs) {
+         tmpEnvelopes.push(
+            Envelope.circle(
+               center,
+               this.getCulDeSacRadius() + this.buildingWidth / 2 + this.spacing
             )
          );
       }

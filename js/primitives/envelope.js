@@ -7,6 +7,19 @@ class Envelope {
       }
    }
 
+   // A round patch of road (e.g. a cul-de-sac bulb). Behaves like any other
+   // envelope: its skeleton is just a zero-length segment at the center.
+   static circle(center, radius, steps = 32) {
+      const env = new Envelope();
+      env.skeleton = new Segment(center, center);
+      const points = [];
+      for (let i = 0; i < steps; i++) {
+         points.push(translate(center, (i / steps) * Math.PI * 2, radius));
+      }
+      env.poly = new Polygon(points);
+      return env;
+   }
+
    static load(info) {
       const env = new Envelope();
       env.skeleton = new Segment(
