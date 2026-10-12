@@ -1420,6 +1420,103 @@ kbd {
    color: var(--muted);
 }
 
+/* Certificate */
+.certificate {
+   width: min(640px, 100%);
+   padding: 16px !important;
+}
+
+.cert-border {
+   padding: 32px 28px;
+   border: 3px double var(--accent);
+   border-radius: 12px;
+   text-align: center;
+}
+
+.cert-border .logo {
+   width: 44px;
+   height: 44px;
+   margin-bottom: 8px;
+}
+
+.cert-border .logo > span {
+   font-size: 22px;
+}
+
+.cert-kicker {
+   margin: 0;
+   font-size: 12px;
+   font-weight: 700;
+   text-transform: uppercase;
+   letter-spacing: 0.12em;
+   color: var(--accent) !important;
+}
+
+.cert-border h2 {
+   font-size: 30px;
+   margin: 6px 0 14px;
+}
+
+.cert-border p {
+   color: var(--text);
+}
+
+#certName {
+   width: min(360px, 100%);
+   text-align: center;
+   font-size: 24px;
+   font-weight: 700;
+   border: none;
+   border-bottom: 2px solid var(--border);
+   border-radius: 0;
+   background: transparent;
+}
+
+.cert-date {
+   font-weight: 600;
+}
+
+.cert-note {
+   margin-top: 18px;
+   font-size: 12px;
+   color: var(--muted) !important;
+}
+
+.picker-head .chips {
+   align-items: center;
+}
+
+button.badge {
+   min-height: 0;
+   border: none;
+   cursor: pointer;
+}
+
+@media print {
+   body.app {
+      height: auto;
+      overflow: visible;
+   }
+
+   .topbar,
+   #carCanvas,
+   #hud,
+   .no-print {
+      display: none !important;
+   }
+
+   #certificate {
+      position: static;
+      background: none;
+      backdrop-filter: none;
+   }
+
+   .certificate {
+      box-shadow: none;
+      border: none;
+   }
+}
+
 /* ==========================================================================
    City builder
    ========================================================================== */

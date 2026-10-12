@@ -28,6 +28,7 @@
             <div id="lessonBadge" class="hud">
                <span class="pill" id="lessonName"></span>
                <button class="pill" onclick="pause()" title="Pause (Esc)">⏸ Pause</button>
+               <button class="pill" id="muteBtn" onclick="toggleMute()" title="Sound on/off" aria-label="Sound on or off">🔊</button>
             </div>
 
             <div id="navCard" class="hud" aria-live="polite">
@@ -69,7 +70,10 @@
                      <h2>Driving School</h2>
                      <p class="muted">Learn the rules of the road on real streets. A coach grades every drive like a road test.</p>
                   </div>
-                  <span class="badge accent" id="progressBadge"></span>
+                  <div class="chips">
+                     <span class="badge accent" id="progressBadge"></span>
+                     <button class="badge good" id="certifiedBtn" onclick="showCertificate()" style="display: none">🎓 Certificate</button>
+                  </div>
                </div>
                <div class="where">
                   <span class="label">📍 Where:</span>
@@ -138,6 +142,27 @@
                   <button class="ghost" onclick="showPicker()">All lessons</button>
                   <button onclick="beginDrive(true)">↻ Try again</button>
                   <button class="primary" id="nextLessonBtn" onclick="nextLesson()">Next lesson →</button>
+                  <button class="primary" id="certificateBtn" onclick="showCertificate()">🎓 Get your certificate</button>
+               </div>
+            </div>
+         </div>
+
+         <div id="certificate" class="overlay" style="display: none">
+            <div class="card certificate">
+               <div class="cert-border">
+                  <span class="logo"><span>🚗</span></span>
+                  <p class="cert-kicker">Self-Driving City · Driving School</p>
+                  <h2>Certificate of Completion</h2>
+                  <p>This certifies that</p>
+                  <input id="certName" type="text" placeholder="Type your name" aria-label="Your name" maxlength="40">
+                  <p>passed the practice <b>road test</b>, driving real streets in <b id="certCity"></b>,
+                     with a score of <b id="certScore"></b> (grade <b id="certGrade"></b>).</p>
+                  <p class="cert-date" id="certDate"></p>
+                  <p class="cert-note">A practice achievement in a simulator. Not a driver's license, permit, or proof of training.</p>
+               </div>
+               <div class="card-actions no-print">
+                  <button class="ghost" onclick="closeCertificate()">Close</button>
+                  <button class="primary" onclick="window.print()">🖨️ Print</button>
                </div>
             </div>
          </div>
@@ -187,9 +212,13 @@
    <script src="js/school/coach.js"></script>
    <script src="js/school/lessons.js"></script>
    <script src="js/school/playerControls.js"></script>
+   <script src="js/school/sounds.js"></script>
    <script>
       const ctx = carCanvas.getContext("2d");
       const controls = new PlayerControls();
+      const sounds = new Sounds();
+      sounds.muted = getSaved("school-muted") == "on";
+      muteBtn.textContent = sounds.muted ? "🔇" : "🔊";
       const params = new URLSearchParams(location.search);
       const FEET_PER_UNIT = 3.28084 / Osm.UNITS_PER_METER;
 
@@ -322,7 +351,7 @@
       // ---------- screens ----------
 
       function show(screen) {
-         for (const el of [lessonPicker, lessonIntro, pauseMenu, reportCard]) {
+         for (const el of [lessonPicker, lessonIntro, pauseMenu, reportCard, certificate]) {
             el.style.display = el == screen ? "flex" : "none";
          }
       }
@@ -360,6 +389,7 @@
          const progress = getProgress();
          const passed = LESSONS.filter((l) => progress[l.id] && progress[l.id].passed).length;
          progressBadge.textContent = passed + " of " + LESSONS.length + " lessons passed";
+         certifiedBtn.style.display = progress.roadtest && progress.roadtest.passed ? "" : "none";
 
          lessonGrid.innerHTML = "";
          LESSONS.forEach((l, i) => {
@@ -588,6 +618,7 @@
          speedo.classList.toggle("over", mph > lesson.speedLimit + 3);
 
          const blinkOn = Math.floor(Date.now() / 350) % 2 == 0;
+         sounds.signal(!!controls.signal && blinkOn);
          signalLeft.classList.toggle("on", controls.signal == "left" && blinkOn);
          signalRight.classList.toggle("on", controls.signal == "right" && blinkOn);
 
@@ -640,6 +671,8 @@
          while (toasts.children.length > 3) {
             toasts.lastChild.remove();
          }
+         if (event.severity == "good") sounds.good();
+         else if (DrivingCoach.PENALTY[event.severity]) sounds.mistake(event.severity);
          const life = ms || (event.severity == "good" ? 2500 : 5500);
          setTimeout(() => el.classList.add("leaving"), life);
          setTimeout(() => el.remove(), life + 350);
@@ -691,8 +724,39 @@
          nextLessonBtn.style.display = passed && i < LESSONS.length - 1 ? "" : "none";
          if (finished) {
             saveResult(lesson.id, s, passed);
+            sounds.finish(passed);
          }
+         certificateBtn.style.display = passed && exam ? "" : "none";
          show(reportCard);
+      }
+
+      // ---------- certificate ----------
+
+      function showCertificate() {
+         const result = getProgress().roadtest;
+         if (!result || !result.passed) return;
+         certName.value = getSaved("school-name") || "";
+         certCity.textContent = result.city || "a real city";
+         certScore.textContent = result.score + "/100";
+         certGrade.textContent = result.grade;
+         certDate.textContent = new Date(result.date || Date.now()).toLocaleDateString(undefined, {
+            year: "numeric", month: "long", day: "numeric",
+         });
+         show(certificate);
+         if (!certName.value) certName.focus();
+      }
+
+      function closeCertificate() {
+         if (state == "report") show(reportCard);
+         else showPicker();
+      }
+
+      certName.addEventListener("input", () => setSaved("school-name", certName.value));
+
+      function toggleMute() {
+         sounds.muted = !sounds.muted;
+         muteBtn.textContent = sounds.muted ? "🔇" : "🔊";
+         setSaved("school-muted", sounds.muted ? "on" : "off");
       }
 
       function groupEvents(events) {
@@ -725,7 +789,10 @@
          const progress = getProgress();
          const old = progress[id];
          if (!old || summary.score > old.score || (passed && !old.passed)) {
-            progress[id] = { score: summary.score, grade: summary.grade, passed: passed || (old && old.passed) || false };
+            progress[id] = {
+               score: summary.score, grade: summary.grade, passed: passed || (old && old.passed) || false,
+               city: cityName(), date: Date.now(),
+            };
             setSaved("school-progress", JSON.stringify(progress));
          }
       }
