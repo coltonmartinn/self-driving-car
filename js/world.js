@@ -64,8 +64,21 @@ class World {
       world.zoom = info.zoom || 1;
       world.offset = info.offset ? new Point(info.offset.x, info.offset.y) : null;
 
-      // road shapes are cheap to rebuild, so they aren't saved
-      world.generateRoads();
+      if (info.envelopes && info.roadBorders) {
+         // finished road shapes handed over by the background worker
+         const loadPoint = (p) => new Point(p.x, p.y);
+         world.envelopes = info.envelopes.map((e) => Envelope.load(e));
+         world.roadBorders = info.roadBorders.map(
+            (s) => new Segment(loadPoint(s.p1), loadPoint(s.p2), s.oneWay)
+         );
+         world.culDeSacs = (info.culDeSacs || []).map(loadPoint);
+         world.laneGuides = null;
+         world.lightGroups = null;
+         world.#computeIntersections();
+      } else {
+         // saves don't include road shapes; they're quick to rebuild
+         world.generateRoads();
+      }
       if (info.buildings) {
          world.buildings = info.buildings.map((b) => Building.load(b));
          world.trees = (info.trees || []).map((t) => Tree.load(t));
@@ -95,6 +108,17 @@ class World {
          markings: this.markings,
          zoom: this.zoom,
          offset: this.offset,
+      };
+   }
+
+   // Everything, including the computed road shapes (used to hand a
+   // finished world from the background worker to the page)
+   toFullJSON() {
+      return {
+         ...this.toJSON(),
+         envelopes: this.envelopes,
+         roadBorders: this.roadBorders,
+         culDeSacs: this.culDeSacs,
       };
    }
 

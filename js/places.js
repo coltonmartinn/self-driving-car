@@ -157,7 +157,36 @@ const Places = {
       onStatus("Downloading roads and buildings around " + Places.shortName(place.name) + "…");
       const data = await Places.fetchMapData(place.lat, place.lon, place.radius, onStatus);
       onStatus("Building the city…");
-      // let the browser paint the message before the heavy work
+      return Places.buildWorldInBackground(data, place);
+   },
+
+   // Runs buildWorld in a Web Worker so the page stays smooth. Browsers don't
+   // allow workers on file:// pages, so then it falls back to the main thread.
+   async buildWorldInBackground(data, place) {
+      if (typeof Worker != "undefined" && Places.viaServer) {
+         try {
+            const info = await new Promise((resolve, reject) => {
+               const worker = new Worker("js/worldWorker.js");
+               worker.onmessage = (evt) => {
+                  worker.terminate();
+                  if (evt.data.ok) resolve(evt.data.info);
+                  else reject(new Error(evt.data.error));
+               };
+               worker.onerror = (evt) => {
+                  worker.terminate();
+                  reject(new Error(evt.message || "worker failed"));
+               };
+               worker.postMessage({ data, place });
+            });
+            Places.lastBuildUsedWorker = true;
+            return World.load(info);
+         } catch (e) {
+            if (e.message.startsWith("No drivable roads")) throw e;
+            console.warn("Background build failed, building on the page instead:", e);
+         }
+      }
+      Places.lastBuildUsedWorker = false;
+      // let the browser paint the loading message before the heavy work
       await new Promise((resolve) => setTimeout(resolve, 50));
       return Places.buildWorld(data, place);
    },

@@ -96,3 +96,17 @@ test("loading a save made with a different road width flags it and refits buildi
       assert.ok(!loaded.envelopes.some((e) => e.poly.intersectsPoly(b.base)));
    }
 });
+
+test("a world handed over with its road shapes loads without rebuilding them", () => {
+   const { points, segments } = WorldGenerator.generateGraph();
+   const world = new World(new Graph(points, segments));
+   const info = JSON.parse(JSON.stringify(world.toFullJSON()));
+   const loaded = World.load(info);
+   assert.equal(loaded.envelopes.length, world.envelopes.length);
+   assert.equal(loaded.culDeSacs.length, world.culDeSacs.length);
+   assert.equal(
+      JSON.stringify(loaded.roadBorders.map((s) => [s.p1.x, s.p1.y, s.p2.x, s.p2.y])),
+      JSON.stringify(world.roadBorders.map((s) => [s.p1.x, s.p1.y, s.p2.x, s.p2.y]))
+   );
+   assert.equal(loaded.intersections.length, world.intersections.length);
+});
