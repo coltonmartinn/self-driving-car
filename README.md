@@ -152,6 +152,10 @@ docs/experiments/    training experiments: logs, chart, write-up
 tests/               node:test suite
 ```
 
+## License
+
+[MIT](LICENSE).
+
 ## Credits
 
 Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. The course that started it: [Radu Mariescu-Istodor](https://www.youtube.com/@Radu) on freeCodeCamp.

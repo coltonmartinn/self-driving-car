@@ -1,5 +1,6 @@
 {
   "name": "self-driving-city",
+  "license": "MIT",
   "version": "1.0.0",
   "description": "Neural-network cars learn to drive real cities from OpenStreetMap, among rule-following traffic. Vanilla JS + canvas.",
   "private": true,
