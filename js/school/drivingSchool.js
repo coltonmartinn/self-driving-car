@@ -42,13 +42,13 @@ const DrivingSchool = {
    // this follows the road back through them to find room for the sign.
    approachMarking(world, neighbors, p, first, kind) {
       const rw = world.roadWidth;
-      const setback = rw / 2 + 30; // stop line just before the junction
+      let setback = rw / 2 + 30; // stop line just before the junction
       if (first.seg.oneWay && first.seg.p2 != p) {
          return null; // nobody drives this way towards p
       }
       const chain = [p, first.point];
       let length = distance(p, first.point);
-      while (length < setback + rw) {
+      while (length < rw * 3.5) { // room for the sign, even behind a crosswalk
          const here = chain[chain.length - 1];
          const ns = neighbors.get(here) || [];
          if (ns.length != 2) {
@@ -65,11 +65,67 @@ const DrivingSchool = {
          return null; // junctions too close together
       }
       const route = new Route(chain);
+      // the stop line goes before a crosswalk at the corner, not on top of it
+      for (const m of world.markings) {
+         if (!(m instanceof Crossing)) continue;
+         const loc = route.locate(m.center, 0, chain.length);
+         if (loc.distance < rw / 2 && loc.progress < setback + m.height) {
+            setback = Math.max(setback, loc.progress + m.height / 2 + 45);
+         }
+      }
+      if (length < setback + rw / 2) {
+         return null;
+      }
       const at = route.pointAt(setback);
       const dir = normalize(subtract(route.pointAt(setback - 10), route.pointAt(setback + 10)));
       const center = first.seg.oneWay ? at : add(at, scale(perpendicular(dir), rw / 4));
       const size = rw / 2;
       return kind == "light" ? new Light(center, dir, size, size) : new Stop(center, dir, size, size);
+   },
+
+   // Mid-block crosswalks on longer streets that have none (many places,
+   // like suburbs, have no crosswalks in their map data at all)
+   addCrosswalks(world) {
+      const rw = world.roadWidth;
+      const neighbors = WorldGenerator.getNeighbors(world.graph);
+      const existing = world.markings.filter((m) => m instanceof Crossing);
+      const isEnd = (p) => (neighbors.get(p) || []).length != 2;
+      const seen = new Set();
+      const added = [];
+      for (const [start, ns] of neighbors) {
+         if (!isEnd(start)) continue;
+         for (const first of ns) {
+            if (seen.has(first.seg)) continue;
+            // follow the street to the next junction or dead end
+            const chain = [start];
+            let step = first;
+            while (step) {
+               seen.add(step.seg);
+               chain.push(step.point);
+               if (isEnd(step.point)) break;
+               const prev = chain[chain.length - 2];
+               step = neighbors.get(step.point).find((n) => n.point != prev && !seen.has(n.seg));
+            }
+            const route = new Route(chain);
+            if (route.length < rw * 5 || DrivingSchool.hash(chain[1]) < 0.35) {
+               continue; // short streets, and some long ones, go without
+            }
+            const center = route.pointAt(route.length / 2);
+            if ([...existing, ...added].some((m) => distance(m.center, center) < rw * 3)) {
+               continue;
+            }
+            const dir = normalize(subtract(route.pointAt(route.length / 2 + 10), route.pointAt(route.length / 2 - 10)));
+            added.push(new Crossing(center, dir, rw, rw / 2));
+         }
+      }
+      world.markings.push(...added);
+      return added.length;
+   },
+
+   crossingsOn(route, world) {
+      return world.markings.filter(
+         (m) => m instanceof Crossing && route.locate(m.center, 0, route.points.length).distance < world.roadWidth / 2 + 10
+      );
    },
 
    // A repeatable number in [0, 1) for a point
@@ -131,7 +187,7 @@ const DrivingSchool = {
 
    // What a lesson's route should look like
    routeScore(features, kind) {
-      const { length, turns, stops, lights } = features;
+      const { length, turns, stops, lights, crossings } = features;
       const meters = length / Osm.UNITS_PER_METER;
       const near = (v, goal, spread) => -Math.abs(v - goal) / spread;
       switch (kind) {
@@ -143,10 +199,13 @@ const DrivingSchool = {
             return Math.min(lights, 3) * 2 + near(meters, 450, 120);
          case "turns":
             return Math.min(turns, 4) * 2 + near(meters, 450, 120);
+         case "crossings":
+            return Math.min(crossings, 3) * 2 + near(meters, 450, 120);
          case "following": // long straight-ish roads, to follow other cars
             return near(meters, 450, 150) - turns;
          default: // a full road test: a bit of everything
-            return Math.min(turns, 4) + Math.min(stops, 3) + Math.min(lights, 3) + near(meters, 600, 250);
+            return Math.min(turns, 4) + Math.min(stops, 3) + Math.min(lights, 3) + Math.min(crossings, 2) +
+               near(meters, 600, 250);
       }
    },
 
@@ -157,6 +216,7 @@ const DrivingSchool = {
          turns: DrivingSchool.turnsOf(route, junctions).length,
          stops: controls.filter((c) => c.marking instanceof Stop).length,
          lights: controls.filter((c) => c.marking instanceof Light).length,
+         crossings: DrivingSchool.crossingsOn(route, world).length,
       };
    },
 

@@ -9,6 +9,14 @@ class DrivingCoach {
          severity: "critical", title: "Collision",
          tip: "Scan ahead, keep your speed down near other cars, and leave yourself room to stop.",
       },
+      hit_pedestrian: {
+         severity: "critical", title: "Hit a pedestrian",
+         tip: "Near crosswalks, slow down and cover the brake. People can step out from behind parked cars.",
+      },
+      pedestrian_yield: {
+         severity: "critical", title: "Didn't yield to a pedestrian",
+         tip: "If someone is in the crosswalk, stop before it and wait until they're all the way across.",
+      },
       curb: {
          severity: "critical", title: "Hit the curb",
          tip: "Slow down before turns, and look through the turn to where you want to go.",
@@ -62,12 +70,15 @@ class DrivingCoach {
          tip: "Not your fault this time. Out on the road, keep scanning your mirrors and leave yourself an escape route.",
       },
       full_stop: { severity: "good", title: "Full stop at the stop sign" },
+      yielded_pedestrian: { severity: "good", title: "Stopped for a pedestrian" },
       waited_green: { severity: "good", title: "Waited for the green light" },
       signaled: { severity: "good", title: "Signaled the turn" },
       safe_gap: { severity: "good", title: "Kept a safe following distance" },
    };
 
    static PENALTY = { minor: 3, major: 10, critical: 30 };
+   // reported in every lesson: how a drive ended badly is always explained
+   static ALWAYS = new Set(["hit_by_traffic", "hit_pedestrian"]);
    static PASS_SCORE = 80;
 
    // speed (world units per frame) to mph: 60 frames/s, 10 units per meter
@@ -96,6 +107,8 @@ class DrivingCoach {
          (m) => m instanceof Light || m instanceof Stop || m instanceof Yield
       );
       this.approaches = new Map(); // marking -> { minSpeed, lineDist, stateWhenStopped }
+      this.crossings = world.markings.filter((m) => m instanceof Crossing);
+      this.crosswalks = new Map(); // crossing -> { edgeDist, waited }
 
       this.segmentGrid = new SpatialGrid(250);
       for (const seg of world.graph.segments) {
@@ -147,7 +160,7 @@ class DrivingCoach {
 
    // Record what happened (if that rule is being judged); returns the event
    report(rule, extra = {}) {
-      if (this.rules && !this.rules.has(rule) && rule != "hit_by_traffic") {
+      if (this.rules && !this.rules.has(rule) && !DrivingCoach.ALWAYS.has(rule)) {
          return null;
       }
       if (this.cooldown[rule] > 0) {
@@ -184,6 +197,8 @@ class DrivingCoach {
          const other = traffic.find((t) => t != car && polysIntersect(car.polygon, t.polygon));
          if (!other) {
             this.report("curb");
+         } else if (other.isPedestrian) {
+            this.report("hit_pedestrian");
          } else if (Math.abs(car.speed) < 0.3 && Math.abs(other.speed) > 0.3) {
             this.report("hit_by_traffic"); // we were (nearly) stopped: they hit us
          } else {
@@ -200,6 +215,7 @@ class DrivingCoach {
 
       this.#checkSpeed();
       this.#checkSignsAndSignals();
+      this.#checkCrosswalks(traffic.filter((t) => t.isPedestrian));
       this.#checkFollowing(traffic);
       this.#checkLane();
       this.#checkTurns(signal);
@@ -302,6 +318,60 @@ class DrivingCoach {
       }
    }
 
+   // Distance from the front of the car to the near edge of a crosswalk it
+   // is driving towards (from either direction); otherwise null
+   crosswalkDistance(m) {
+      const car = this.car;
+      const heading = this.heading();
+      const along = dot(heading, m.directionVector);
+      if (Math.abs(along) < 0.6) {
+         return null;
+      }
+      const dir = along > 0 ? m.directionVector : scale(m.directionVector, -1);
+      const rel = subtract(m.center, car);
+      if (Math.abs(rel.x * dir.y - rel.y * dir.x) > m.width * 0.6) {
+         return null;
+      }
+      return dot(rel, dir) - m.height / 2 - car.height / 2;
+   }
+
+   // Anyone walking in a crosswalk must be allowed to finish crossing
+   #checkCrosswalks(people) {
+      const car = this.car;
+      for (const m of this.crossings) {
+         if (Math.abs(m.center.x - car.x) > 400 || Math.abs(m.center.y - car.y) > 400) {
+            this.crosswalks.delete(m);
+            continue;
+         }
+         const d = this.crosswalkDistance(m);
+         if (d == null || d < -60 || d > 300) {
+            this.crosswalks.delete(m);
+            continue;
+         }
+         let c = this.crosswalks.get(m);
+         if (!c) {
+            c = { edgeDist: d, waited: false };
+            this.crosswalks.set(m, c);
+         }
+         // anyone on the road in our half, or about to reach it
+         const busy = people.some((p) =>
+            p.crossing == m && p.onRoad &&
+            Math.abs(dot(subtract(p, car), perpendicular(this.heading()))) < this.world.roadWidth / 2
+         );
+         if (busy && d > -10 && d < 150 && Math.abs(car.speed) < 0.1) {
+            c.waited = true;
+         }
+         if (c.edgeDist > 0 && d <= 0) {
+            if (busy) {
+               this.report("pedestrian_yield");
+            } else if (c.waited) {
+               this.report("yielded_pedestrian");
+            }
+         }
+         c.edgeDist = d;
+      }
+   }
+
    // The 2-second rule, for the closest car ahead in our lane
    #checkFollowing(traffic) {
       const car = this.car;
@@ -309,7 +379,7 @@ class DrivingCoach {
       const speed = car.speed;
       let gap = Infinity;
       for (const other of traffic) {
-         if (other == car) continue;
+         if (other == car || other.isPedestrian) continue;
          const rel = subtract(other, car);
          const along = dot(rel, heading);
          if (along <= 0 || along > 600) continue;

@@ -79,6 +79,22 @@ const LESSONS = [
       rules: ["crash", "curb", "tailgating", "safe_gap", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
    },
    {
+      id: "pedestrians",
+      emoji: "🚶",
+      title: "Crosswalks",
+      summary: "Watch for people on foot, and let them cross.",
+      learn: [
+         "Slow down as you near a crosswalk, and look at both curbs for people about to cross.",
+         "If someone is in the crosswalk, stop before the stripes and wait until they're all the way across.",
+         "Never pass a car that's stopped at a crosswalk: it may be stopped for someone you can't see.",
+      ],
+      route: "crossings",
+      traffic: 10,
+      speedLimit: 25,
+      pedestrians: true,
+      rules: ["crash", "curb", "pedestrian_yield", "yielded_pedestrian", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
       id: "roadtest",
       emoji: "🎓",
       title: "Road test",
@@ -91,6 +107,7 @@ const LESSONS = [
       route: "roadtest",
       traffic: 25,
       speedLimit: 30,
+      pedestrians: true,
       rules: null,
    },
 ];

@@ -181,6 +181,7 @@
    <script src="js/car/car.js"></script>
    <script src="js/car/trafficCar.js"></script>
    <script src="js/car/genetics.js"></script>
+   <script src="js/pedestrians.js"></script>
    <script src="js/simulation.js"></script>
    <script src="js/school/drivingSchool.js"></script>
    <script src="js/school/coach.js"></script>
@@ -301,6 +302,7 @@
          citySlug = slug;
          if (slug) setSaved("school-city", slug);
          DrivingSchool.addTrafficControls(world);
+         DrivingSchool.addCrosswalks(world);
          world.lightTiming = { green: 8, yellow: 3 }; // human-friendly, like real signals
          sim = new Simulation(world, { playerControls: controls, trafficCount: 15 });
          sim.manual = true;
@@ -328,6 +330,7 @@
       function showPicker() {
          state = "picker";
          if (sim) sim.clearTrip();
+         if (world) world.crowd = null;
          hud.style.display = "none";
          controls.enabled = false;
          renderPicker();
@@ -402,6 +405,7 @@
          const names = {
             crash: "for crashes", ran_stop: "stop signs", red_light: "red lights", speeding: "speed",
             tailgating: "following distance", no_signal: "turn signals", wrong_side: "lane position",
+            pedestrian_yield: "crosswalks",
          };
          const list = rules.filter((r) => names[r]).map((r) => names[r]);
          return list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
@@ -417,6 +421,7 @@
          // so you catch up to it and have to keep your distance
          const pace = lesson.id == "following" ? [0.6, 0.75] : [0.8, 1];
          sim.options.trafficCount = lesson.traffic;
+         sim.options.pedestrians = !!lesson.pedestrians;
          sim.options.trafficSpeed = [limit * pace[0], limit * pace[1]];
 
          if (sameTrip && tripDestination) {
@@ -499,7 +504,8 @@
          if (world && sim) {
             if (state == "driving") {
                sim.step();
-               for (const event of coach.update(sim.traffic)) {
+               const others = sim.crowd ? [...sim.traffic, ...sim.crowd.people] : sim.traffic;
+               for (const event of coach.update(others)) {
                   toast(event);
                }
                if (endTimer < 0 && (car.arrived || coach.finished)) {
@@ -665,7 +671,9 @@
             [formatFeet(s.distanceMeters * Osm.UNITS_PER_METER), "driven"],
             [minutes + ":" + String(seconds).padStart(2, "0"), "time"],
             [s.topSpeed + " mph", "top speed"],
-            lesson.id == "stops" ? [s.fullStops, "full stops"] : [s.signaledTurns + "/" + s.turns, "turns signaled"],
+            lesson.id == "stops" ? [s.fullStops, "full stops"]
+               : lesson.id == "pedestrians" ? [s.praise.filter((e) => e.rule == "yielded_pedestrian").length, "people yielded to"]
+                  : [s.signaledTurns + "/" + s.turns, "turns signaled"],
          ];
          reportStats.innerHTML = stats.map(([v, label]) => "<div class='stat'><b>" + v + "</b><span>" + label + "</span></div>").join("");
 

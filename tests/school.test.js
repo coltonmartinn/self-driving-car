@@ -5,8 +5,8 @@ const path = require("node:path");
 const { loadApp } = require("./helpers/loadApp");
 
 const {
-   Point, Segment, Graph, World, Car, Light, Stop, Route, Simulation,
-   WorldGenerator, DrivingSchool, DrivingCoach, LESSONS, distance,
+   Point, Segment, Graph, World, Car, Light, Stop, Route, Simulation, Crossing,
+   WorldGenerator, DrivingSchool, DrivingCoach, LESSONS, distance, Pedestrian, Crowd, TrafficCar, TrafficNetwork,
 } = loadApp({ seed: 3 });
 
 // A road going north from (0, 0), with a road to the east at y = -1500
@@ -245,6 +245,11 @@ test("unmarked intersections get signs, the same ones every time", () => {
          o.directionVector.x * m.directionVector.x + o.directionVector.y * m.directionVector.y > 0.7);
       assert.equal(twins.length, 0);
    }
+   // and stop lines sit before crosswalks, not on them
+   const crossings = world.markings.filter((m) => m instanceof Crossing);
+   for (const m of controls) {
+      assert.ok(crossings.every((x) => distance(m.center, x.center) >= (x.height + m.height) / 2));
+   }
 });
 
 test("routes know their turns, and directions name the next one", () => {
@@ -280,4 +285,106 @@ test("every lesson has instructions and judges real rules", () => {
          assert.ok(DrivingCoach.RULES[rule], lesson.id + ": " + rule);
       }
    }
+});
+
+// ---------- pedestrians ----------
+
+// A crosswalk across the north road, 800 units up
+function withCrosswalk() {
+   const t = tJunction();
+   const crossing = new Crossing(new Point(0, -800), new Point(0, -1), t.world.roadWidth, t.world.roadWidth / 2);
+   t.world.markings.push(crossing);
+   return { ...t, crossing };
+}
+
+// Someone already halfway across
+function walkerOn(crossing) {
+   const person = new Pedestrian(crossing, 1, () => 0.5);
+   person.state = "crossing";
+   person.t = 0.4;
+   person.update([]);
+   return person;
+}
+
+test("pedestrians wait for a gap, then walk all the way across", () => {
+   const { crossing } = withCrosswalk();
+   const person = new Pedestrian(crossing, 1, () => 0.5);
+   const speeding = new Car(0, -900, 30, 50, "DUMMY");
+   speeding.speed = 2;
+   for (let i = 0; i < 400; i++) person.update([speeding]);
+   assert.equal(person.state, "waiting", "won't step in front of a fast car right there");
+   for (let i = 0; i < 2000 && person.state != "done"; i++) person.update([]);
+   assert.equal(person.state, "done");
+
+   // a car waiting before the crosswalk is letting them go
+   const other = new Pedestrian(crossing, 1, () => 0.5);
+   const polite = new Car(35, -800 + 90, 30, 50, "DUMMY");
+   polite.speed = 0;
+   for (let i = 0; i < 400 && other.state == "waiting"; i++) other.update([polite]);
+   assert.equal(other.state, "crossing");
+});
+
+test("driving through a crosswalk while someone is crossing fails; waiting is praised", () => {
+   const { world, crossing } = withCrosswalk();
+   const rude = studentCar(world, -400);
+   const coach = new DrivingCoach(world, rude);
+   const person = walkerOn(crossing);
+   rude.controls.forward = true;
+   for (let i = 0; i < 600 && coach.crosswalkDistance(crossing) > -20; i++) {
+      rude.update([], []);
+      coach.update([person]);
+   }
+   assert.equal(coach.mistakes.map((e) => e.rule).join(), "pedestrian_yield");
+
+   const polite = studentCar(world, -400);
+   const coach2 = new DrivingCoach(world, polite);
+   const walker = walkerOn(crossing);
+   polite.controls.forward = true;
+   drive(polite, coach2, () => coach2.crosswalkDistance(crossing) < 50, 2000, [walker]);
+   polite.controls.forward = false;
+   polite.controls.reverse = true;
+   drive(polite, coach2, () => polite.speed == 0, 2000, [walker]);
+   polite.controls.reverse = false;
+   for (let i = 0; i < 2000 && walker.state != "done"; i++) {
+      walker.update([]);
+      coach2.update([walker]);
+   }
+   polite.controls.forward = true;
+   drive(polite, coach2, () => coach2.crosswalkDistance(crossing) < -20, 2000, [walker]);
+   assert.equal(coach2.events.map((e) => e.rule).join(), "yielded_pedestrian");
+});
+
+test("hitting a pedestrian is always reported, whatever the lesson", () => {
+   const { world } = tJunction();
+   const car = studentCar(world);
+   const coach = new DrivingCoach(world, car, { rules: ["speeding"] });
+   const person = { isPedestrian: true, x: car.x, y: car.y - 20, polygon: [
+      { x: car.x - 9, y: car.y - 29 }, { x: car.x + 9, y: car.y - 29 }, { x: car.x + 9, y: car.y - 11 }, { x: car.x - 9, y: car.y - 11 },
+   ] };
+   car.damaged = true;
+   coach.update([person]);
+   assert.equal(coach.mistakes.map((e) => e.rule).join(), "hit_pedestrian");
+});
+
+test("traffic stops for someone in the crosswalk", () => {
+   const { world, crossing } = withCrosswalk();
+   const network = new TrafficNetwork(world);
+   const edge = network.edges.find((e) => e.from.y == 0 && e.to.y == -1500);
+   const car = new TrafficCar(network, edge, 0.3); // heading north towards the crosswalk
+   const person = walkerOn(crossing);
+   person.t = 0.6; // in the car's lane
+   person.update([]);
+   for (let i = 0; i < 600; i++) car.update([person]);
+   assert.ok(car.speed < 0.1, "stopped");
+   assert.ok(car.y > crossing.center.y + 30, "before the crosswalk");
+});
+
+test("streets without crosswalks get some mid-block, and the crosswalk lesson finds them", () => {
+   const file = path.join(__dirname, "..", "data", "cities", "beverly-hills.json");
+   const world = World.load(JSON.parse(fs.readFileSync(file, "utf8")));
+   assert.equal(world.markings.filter((m) => m instanceof Crossing).length, 0);
+   assert.ok(DrivingSchool.addCrosswalks(world) > 0);
+   const sim = new Simulation(world, { trafficOn: false });
+   assert.ok(DrivingSchool.pickTrip(sim, "crossings", 20));
+   assert.ok(DrivingSchool.features(sim.trip.route, world).crossings >= 1);
 });

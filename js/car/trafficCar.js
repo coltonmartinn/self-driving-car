@@ -163,12 +163,14 @@ class TrafficCar extends Car {
          this.ghostFrames--;
       }
       for (const other of otherTraffic) {
-         if (other == this || (ghost && !other.isPlayer)) continue;
+         if (other == this || (ghost && !other.isPlayer && !other.isPedestrian)) continue;
+         if (other.isPedestrian && !other.onRoad) continue; // still on the sidewalk
          const rel = new Point(other.x - this.x, other.y - this.y);
          const along = dot(rel, heading);
          if (along <= 0 || along > 160) continue;
          const lateral = Math.abs(rel.x * heading.y - rel.y * heading.x);
-         if (lateral > (other.isPlayer ? 45 : 28)) continue;
+         // anyone walking across the road ahead, in either lane, gets to finish
+         if (lateral > (other.isPedestrian ? 80 : other.isPlayer ? 45 : 28)) continue;
          const limit = stoppingSpeed(along - 75);
          if (limit < targetSpeed) {
             targetSpeed = limit;

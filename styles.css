@@ -1252,6 +1252,7 @@ body.touch #toasts {
 }
 
 .lesson.exam {
+   grid-column: 1 / -1;
    border-color: var(--sun);
    background: linear-gradient(180deg, rgba(255, 197, 51, 0.16), transparent);
 }

@@ -13,6 +13,7 @@ class Simulation {
       generationFrames: 60 * 90, // a generation lasts at most 90 s
       gps: true, // false = cars get no GPS hints (for experiments)
       trafficSpeed: null, // [min, max] cruising speed for traffic (default: TrafficCar's own)
+      pedestrians: false, // people walking across crosswalks (needs js/pedestrians.js)
       playerControls: null, // manual mode: a human's PlayerControls (else the keyboard)
       random: Math.random,
    };
@@ -36,6 +37,7 @@ class Simulation {
 
       this.cars = [];
       this.traffic = [];
+      this.crowd = null; // pedestrians, when options.pedestrians is on
       this.bestCar = null;
       this.frame = 0;
    }
@@ -106,6 +108,8 @@ class Simulation {
          this.cars.push(car);
       }
       this.traffic = this.options.trafficOn && !this.isEmpty ? this.#spawnTraffic() : [];
+      this.crowd = this.options.pedestrians ? new Crowd(this.world) : null;
+      this.world.crowd = this.crowd;
       this.bestCar = this.cars[0];
       this.frame = 0;
       this.world.cars = this.cars;
@@ -147,8 +151,14 @@ class Simulation {
       this.world.update();
       this.frame++;
 
-      // traffic also keeps its distance from a human driver
-      const others = this.manual ? [...this.traffic, ...this.cars] : this.traffic;
+      // pedestrians cross when there's a gap; traffic stops for them and
+      // keeps its distance from a human driver
+      const people = this.crowd ? this.crowd.people : [];
+      if (this.crowd) {
+         this.crowd.update(this.bestCar, [...this.traffic, ...this.cars], this.trip ? this.trip.route : null);
+      }
+      const obstacles = people.length > 0 ? [...this.traffic, ...people] : this.traffic;
+      const others = this.manual ? [...obstacles, ...this.cars] : obstacles;
       for (const car of this.traffic) {
          car.update(others);
       }
@@ -173,7 +183,7 @@ class Simulation {
             continue;
          }
          const borders = [...this.borderGrid.query(SpatialGrid.boundsAround(car, 250))];
-         const nearbyTraffic = this.traffic.filter(
+         const nearbyTraffic = obstacles.filter(
             (t) => Math.abs(t.x - car.x) < 250 && Math.abs(t.y - car.y) < 250
          );
          car.update(borders, nearbyTraffic);

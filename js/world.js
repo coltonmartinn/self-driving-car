@@ -36,6 +36,7 @@ class World {
       this.cars = [];
       this.bestCar = null;
       this.traffic = [];
+      this.crowd = null; // pedestrians (a Crowd), if any
       this.route = null; // GPS route (a Route) and its destination marker
       this.destination = null;
       this.frameCount = 0;
@@ -475,6 +476,9 @@ class World {
          this.destination.draw(ctx);
       }
 
+      if (this.crowd) {
+         this.crowd.draw(ctx);
+      }
       for (const car of this.traffic) {
          car.draw(ctx);
       }
