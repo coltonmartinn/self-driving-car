@@ -153,21 +153,26 @@ class Polygon {
       return this.containsPoint(midpoint);
    }
 
-   // Ray casting: odd number of crossings means the point is inside
+   // Ray casting: shoot a ray to the right and count edge crossings; odd
+   // means inside. Each edge counts its lower end but not its upper one, so a
+   // ray passing exactly through a corner is still counted once.
    containsPoint(point) {
       if (!this.isNearBounds(point)) {
          return false;
       }
-      const b = this.getBounds();
-      const outerPoint = new Point(b.left - 1000, b.top - 1000);
-      let intersectionCount = 0;
-      for (const seg of this.segments) {
-         const int = getIntersection(outerPoint, point, seg.p1, seg.p2);
-         if (int) {
-            intersectionCount++;
+      let inside = false;
+      const pts = this.points;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+         const a = pts[i];
+         const b = pts[j];
+         if (
+            a.y > point.y != b.y > point.y &&
+            point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x
+         ) {
+            inside = !inside;
          }
       }
-      return intersectionCount % 2 == 1;
+      return inside;
    }
 
    drawSegments(ctx) {
