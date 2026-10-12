@@ -192,16 +192,36 @@ class World {
 
    // Our roads are a fixed 14 m wide, so some real buildings on narrow
    // streets would stick into the road. Drop those.
-   #removeBuildingsOnRoads(buildings) {
+   // A small overlap (up to `tolerance`, 3 m) is allowed: real streets are
+   // often narrower than ours, and dropping every building that touches the
+   // road would empty out dense cities like Paris.
+   #removeBuildingsOnRoads(buildings, tolerance = 30) {
       const grid = this.#indexEnvelopes();
       return buildings.filter((b) => {
-         for (const env of grid.query(b.base.getBounds())) {
-            if (
-               env.poly.intersectsPoly(b.base) ||
-               env.poly.containsPoint(b.base.points[0]) ||
-               b.base.containsPoint(env.skeleton.p1)
-            ) {
+         const base = b.base;
+         const centroid = scale(
+            base.points.reduce((sum, p) => add(sum, p), new Point(0, 0)),
+            1 / base.points.length
+         );
+         for (const env of grid.query(base.getBounds())) {
+            const { p1, p2 } = env.skeleton;
+            // the road runs through the building
+            if (base.containsPoint(p1) || base.containsPoint(p2)) {
                return false;
+            }
+            for (const edge of base.segments) {
+               if (getIntersection(edge.p1, edge.p2, p1, p2)) {
+                  return false;
+               }
+            }
+            // the building sits in the road, or reaches deep into it
+            if (env.poly.containsPoint(centroid)) {
+               return false;
+            }
+            for (const v of base.points) {
+               if (env.poly.containsPoint(v) && env.poly.distanceToPoint(v) > tolerance) {
+                  return false;
+               }
             }
          }
          return true;
