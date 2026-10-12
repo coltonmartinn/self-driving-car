@@ -21,27 +21,43 @@ a {
 }
 
 #controls {
-   margin-top: 8px;
+   margin: 10px auto 0;
+   max-width: 900px;
+   padding: 0 16px;
    display: flex;
-   flex-wrap: wrap;
-   justify-content: center;
-   gap: 14px;
+   flex-direction: column;
+   align-items: center;
+   gap: 8px;
 }
 
 .group {
-   display: inline-flex;
-   gap: 4px;
+   display: flex;
+   flex-wrap: wrap;
+   justify-content: center;
+   gap: 6px;
 }
 
 button,
 .file-input-label {
+   display: inline-flex;
+   align-items: center;
+   gap: 6px;
    background: #2c2c2c;
    color: #ddd;
-   border: 1px solid #555;
-   border-radius: 5px;
-   padding: 4px 8px;
-   font-size: 20px;
+   border: 1px solid #444;
+   border-radius: 999px;
+   padding: 5px 12px 5px 9px;
+   font-family: inherit;
+   font-size: 14px;
+   line-height: 1;
+   white-space: nowrap;
    cursor: pointer;
+   transition: background-color 0.15s, transform 0.1s;
+}
+
+button .icon,
+.file-input-label .icon {
+   font-size: 18px;
 }
 
 button:hover,
@@ -49,9 +65,25 @@ button:hover,
    background-color: #3a3a3a;
 }
 
+button:active,
+.file-input-label:active {
+   transform: scale(0.96);
+}
+
 button.active {
-   background-color: #ddd;
+   background-color: #f2f2f2;
    border-color: white;
+   color: #222;
+}
+
+button.primary {
+   background-color: #2f8f4e;
+   border-color: #3aa65d;
+   color: white;
+}
+
+button.primary:hover {
+   background-color: #37a05a;
 }
 
 .file-input-label input {
@@ -101,53 +133,284 @@ button.active {
    margin-top: 8px;
 }
 
-/* ---------- simulator ---------- */
+/* ---------- shared search box ---------- */
 
-body.simulator {
-   overflow: hidden;
+.search-form {
+   position: relative;
    display: flex;
+   gap: 6px;
+   flex: 1;
+   max-width: 680px;
+}
+
+.search-form input,
+.search-form select {
+   background: #262626;
+   color: #eee;
+   border: 1px solid #444;
+   border-radius: 999px;
+   padding: 8px 14px;
+   font-family: inherit;
+   font-size: 15px;
+   min-width: 0;
+}
+
+.search-form input {
+   flex: 1;
+}
+
+.search-form input:focus,
+.search-form select:focus {
+   outline: 2px solid #3aa65d;
+   outline-offset: 1px;
+}
+
+.search-results {
+   display: none;
+   position: absolute;
+   top: 100%;
+   left: 0;
+   right: 0;
+   margin-top: 6px;
+   background: #262626;
+   border: 1px solid #444;
+   border-radius: 12px;
+   overflow: hidden;
+   z-index: 20;
+   text-align: left;
+   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.search-results button {
+   display: flex;
+   width: 100%;
+   border: none;
+   border-bottom: 1px solid #333;
+   border-radius: 0;
+   padding: 10px 14px;
+   white-space: normal;
+   line-height: 1.35;
+   text-align: left;
+   background: none;
+}
+
+.search-results button:hover {
+   background: #333;
+}
+
+.search-results .message {
+   padding: 10px 14px;
+   color: #bbb;
+   font-size: 14px;
+}
+
+.status {
+   min-height: 1.2em;
+   font-size: 13px;
+   color: #bbb;
+}
+
+/* ---------- editor ---------- */
+
+.editor-header {
+   position: relative;
+}
+
+.back-link {
+   position: absolute;
+   left: 16px;
+   top: 50%;
+   transform: translateY(-50%);
+   font-size: 14px;
+   text-decoration: none;
+}
+
+.panel h3 {
+   margin: 4px 0 12px;
+}
+
+.panel details {
+   margin-top: 12px;
+   font-size: 13px;
+   color: #bbb;
+}
+
+.panel summary {
+   cursor: pointer;
+}
+
+/* ---------- main app ---------- */
+
+body.app {
+   overflow: hidden;
+   height: 100vh;
+   display: flex;
+   flex-direction: column;
+   text-align: left;
+}
+
+#topbar {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: 10px 16px;
+   padding: 8px 16px;
+   background: #181818;
+   border-bottom: 1px solid #333;
+}
+
+.brand {
+   font-size: 17px;
+   font-weight: 600;
+   white-space: nowrap;
+}
+
+.side-link {
+   margin-left: auto;
+   font-size: 14px;
+   white-space: nowrap;
+   text-decoration: none;
+   color: #bbb;
+}
+
+.side-link:hover {
+   color: white;
+}
+
+#main {
+   flex: 1;
+   display: flex;
+   min-height: 0;
+}
+
+#stage {
+   position: relative;
+   flex: 1;
+   min-width: 0;
+   overflow: hidden;
+   background-color: #2a5;
 }
 
 #carCanvas {
+   display: block;
    background-color: #2a5;
+}
+
+#placeLabel {
+   position: absolute;
+   top: 12px;
+   left: 12px;
+   padding: 6px 12px;
+   border-radius: 999px;
+   background: rgba(0, 0, 0, 0.55);
+   font-size: 14px;
+   pointer-events: none;
+}
+
+#placeLabel:empty {
+   display: none;
+}
+
+.overlay {
+   position: absolute;
+   inset: 0;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   padding: 16px;
+   background: rgba(0, 0, 0, 0.35);
+}
+
+.card {
+   max-width: 460px;
+   background: #222;
+   border: 1px solid #444;
+   border-radius: 14px;
+   padding: 22px 24px;
+   text-align: center;
+   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.card h2 {
+   margin: 0 0 8px;
+   font-weight: 600;
+}
+
+.card p {
+   color: #bbb;
+   line-height: 1.45;
+}
+
+.muted {
+   font-size: 13px;
+}
+
+.chips {
+   display: flex;
+   flex-wrap: wrap;
+   justify-content: center;
+   gap: 6px;
+   margin: 14px 0 4px;
+}
+
+.spinner {
+   width: 34px;
+   height: 34px;
+   margin: 0 auto 6px;
+   border: 4px solid #444;
+   border-top-color: #3aa65d;
+   border-radius: 50%;
+   animation: spin 0.9s linear infinite;
+}
+
+.overlay.error .spinner {
+   display: none;
+}
+
+@keyframes spin {
+   to {
+      transform: rotate(360deg);
+   }
 }
 
 #sidebar {
    width: 300px;
+   flex: none;
    display: flex;
    flex-direction: column;
    background: #111;
+   overflow: hidden;
 }
 
 #networkCanvas {
    background-color: black;
+   flex: none;
 }
 
 #miniMapCanvas {
    background-color: #2a5;
    opacity: 0.85;
+   margin-top: auto;
+   flex: none;
 }
 
 #stats {
-   padding: 6px;
+   padding: 6px 10px;
+   min-height: 52px;
    font-size: 13px;
+   line-height: 1.4;
    color: #bbb;
 }
 
 #simControls {
-   display: flex;
-   flex-wrap: wrap;
-   justify-content: center;
-   gap: 4px;
-   padding: 6px;
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 6px;
+   padding: 8px;
 }
 
-#message {
-   position: fixed;
-   top: 40%;
-   left: calc(50% - 150px);
-   transform: translate(-50%, -50%);
-   background: rgba(0, 0, 0, 0.8);
-   padding: 16px 24px;
-   border-radius: 8px;
+#simControls button {
+   justify-content: center;
+   font-size: 13px;
+   padding: 6px 8px;
 }

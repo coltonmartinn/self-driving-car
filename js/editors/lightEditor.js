@@ -1,6 +1,6 @@
 class LightEditor extends MarkingEditor {
    constructor(viewport, world) {
-      super(viewport, world, () => world.laneGuides);
+      super(viewport, world, () => world.getLaneGuides());
    }
 
    createMarking(center, directionVector) {

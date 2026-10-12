@@ -86,13 +86,7 @@ const WorldGenerator = {
       // shift from the road center into the right-hand lane
       const toLane = (center, dir) => add(center, scale(perpendicular(dir), rw / 4));
 
-      const neighbors = new Map();
-      for (const seg of graph.segments) {
-         if (!neighbors.has(seg.p1)) neighbors.set(seg.p1, []);
-         if (!neighbors.has(seg.p2)) neighbors.set(seg.p2, []);
-         neighbors.get(seg.p1).push(seg.p2);
-         neighbors.get(seg.p2).push(seg.p1);
-      }
+      const neighbors = WorldGenerator.getNeighbors(graph);
 
       // Signs / lights on every road entering an intersection
       for (const p of graph.points) {
@@ -106,18 +100,10 @@ const WorldGenerator = {
          } else {
             kind = Math.random() < 0.5 ? "stop" : "yield";
          }
-         for (const q of ns) {
-            if (distance(p, q) < rw * 2.5) {
-               continue; // road too short to fit a sign
-            }
-            const dir = normalize(subtract(p, q)); // driving towards p
-            const center = toLane(subtract(p, scale(dir, rw / 2 + 30)), dir);
-            if (kind == "light") {
-               markings.push(new Light(center, dir, lane, lane));
-            } else if (kind == "stop") {
-               markings.push(new Stop(center, dir, lane, lane));
-            } else {
-               markings.push(new Yield(center, dir, lane, lane));
+         for (const { point: q, seg } of ns) {
+            const marking = WorldGenerator.approachMarking(world, p, q, seg, kind);
+            if (marking) {
+               markings.push(marking);
             }
          }
       }
@@ -163,6 +149,45 @@ const WorldGenerator = {
       }
 
       return markings;
+   },
+
+   // point -> [{ point: neighbor, seg }]
+   getNeighbors(graph) {
+      const neighbors = new Map();
+      for (const seg of graph.segments) {
+         if (!neighbors.has(seg.p1)) neighbors.set(seg.p1, []);
+         if (!neighbors.has(seg.p2)) neighbors.set(seg.p2, []);
+         neighbors.get(seg.p1).push({ point: seg.p2, seg });
+         neighbors.get(seg.p2).push({ point: seg.p1, seg });
+      }
+      return neighbors;
+   },
+
+   // A sign or light for traffic driving from q towards intersection p.
+   // Returns null if the road is too short or one-way in the other direction.
+   approachMarking(world, p, q, seg, kind) {
+      const rw = world.roadWidth;
+      const lane = rw / 2;
+      if (distance(p, q) < rw * 2.5) {
+         return null;
+      }
+      if (seg.oneWay && seg.p2 != p) {
+         return null; // nobody drives this way on a one-way street
+      }
+      const dir = normalize(subtract(p, q)); // driving towards p
+      let center = subtract(p, scale(dir, rw / 2 + 30));
+      if (!seg.oneWay) {
+         center = add(center, scale(perpendicular(dir), rw / 4)); // right lane
+      }
+      switch (kind) {
+         case "light":
+            return new Light(center, dir, lane, lane);
+         case "stop":
+            return new Stop(center, dir, lane, lane);
+         case "yield":
+            return new Yield(center, dir, lane, lane);
+      }
+      return null;
    },
 
    shuffle(array) {

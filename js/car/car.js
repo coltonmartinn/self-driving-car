@@ -11,12 +11,13 @@ class Car {
       this.friction = 0.05;
       this.angle = angle; // 0 = facing up (-y)
       this.damaged = false;
-      this.fitness = 0;
+      this.fitness = 0; // scored by the simulator (how far the car got)
       this.color = color;
 
       this.useBrain = controlType == "AI";
 
-      if (controlType != "DUMMY") {
+      // DUMMY and AUTO (traffic) cars don't need sensors or a brain
+      if (controlType == "AI" || controlType == "KEYS") {
          this.sensor = new Sensor(this);
          this.brain = new NeuralNetwork([this.sensor.rayCount, 6, 4]);
       }
@@ -37,7 +38,6 @@ class Car {
 
       if (!this.damaged) {
          this.#move();
-         this.fitness += this.speed;
          this.polygon = this.#createPolygon();
          this.damaged = this.#assessDamage(nearby, traffic);
       }

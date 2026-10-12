@@ -3,63 +3,75 @@
 <head>
    <meta charset="UTF-8">
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <title>World Editor</title>
+   <title>Self-Driving City</title>
    <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-   <h1>World Editor</h1>
-   <canvas id="myCanvas"></canvas>
+<body class="app">
+   <header id="topbar">
+      <div class="brand"><span class="icon">🚗</span> Self-Driving City</div>
+      <form id="searchForm" class="search-form">
+         <input id="searchInput" type="search" placeholder="Search a city, address or zip code…" autocomplete="off">
+         <select id="sizeSelect" title="How much of the map to load">
+            <option value="small">Small area</option>
+            <option value="medium" selected>Medium area</option>
+            <option value="large">Large area</option>
+         </select>
+         <button class="primary" type="submit"><span class="icon">🔍</span>Go</button>
+         <div id="searchResults" class="search-results"></div>
+      </form>
+      <a class="side-link" href="editor.html" title="Design your own city from scratch">🏗️ Build your own city</a>
+   </header>
 
-   <div id="controls">
-      <span class="group">
-         <button onclick="dispose()" title="Clear everything">🗑️</button>
-         <button onclick="save()" title="Save (the simulator uses this)">💾</button>
-         <button onclick="download()" title="Download as a .world file">⬇️</button>
-         <label for="fileInput" class="file-input-label" title="Load a .world file">📂
-            <input type="file" id="fileInput" accept=".world,.json" onchange="load(event)">
-         </label>
-         <button onclick="openOsmPanel()" title="Import real roads from OpenStreetMap">🗺️</button>
-         <button onclick="generateRandomWorld()" title="Generate a random world">🎲</button>
-      </span>
-      <span class="group">
-         <button id="graphBtn" onclick="setMode('graph')" title="Roads">🌐</button>
-         <button id="stopBtn" onclick="setMode('stop')" title="Stop sign">🛑</button>
-         <button id="yieldBtn" onclick="setMode('yield')" title="Yield sign">⚠️</button>
-         <button id="crossingBtn" onclick="setMode('crossing')" title="Pedestrian crossing">🚶</button>
-         <button id="parkingBtn" onclick="setMode('parking')" title="Parking spot">🅿️</button>
-         <button id="lightBtn" onclick="setMode('light')" title="Traffic light">🚦</button>
-         <button id="startBtn" onclick="setMode('start')" title="Car start position">🚙</button>
-         <button id="targetBtn" onclick="setMode('target')" title="Target">🎯</button>
-      </span>
-      <span class="group">
-         <button onclick="goToSimulator()" title="Save and open the car simulator">▶️ Drive</button>
-      </span>
-   </div>
-   <p class="help" id="help"></p>
+   <main id="main">
+      <div id="stage">
+         <canvas id="carCanvas"></canvas>
+         <div id="placeLabel"></div>
 
-   <div id="osmPanel" class="panel" style="display: none">
-      <p>
-         1. Open <a href="https://overpass-turbo.eu/" target="_blank">overpass-turbo.eu</a>,
-         zoom to a small neighbourhood and run this query:
-      </p>
-      <pre id="osmQuery">[out:json];
-(
-  way['highway']
-  ['highway' !~ 'pedestrian|footway|cycleway|path|service|corridor|track|steps|raceway|bridleway|proposed|construction|elevator|bus_guideway|sidewalk|crossing']
-  ({{bbox}});
-);
-out body;
->;
-out skel;</pre>
-      <p>2. Click "Data" (top right), copy all of it and paste it here:</p>
-      <textarea id="osmDataContainer" placeholder="Paste OSM data here"></textarea>
-      <div>
-         <button onclick="parseOsmData()" title="Import">✔️</button>
-         <button onclick="closeOsmPanel()" title="Cancel">❌</button>
+         <div id="welcome" class="overlay" style="display: none">
+            <div class="card">
+               <h2>Where do you want to drive?</h2>
+               <p>
+                  Search any real place above. Your cars learn to drive there by trial and
+                  error, among traffic that already knows the rules of the road.
+               </p>
+               <div class="chips">
+                  <button class="chip" data-q="Times Square, New York">🗽 Times Square</button>
+                  <button class="chip" data-q="Paris, France">🥐 Paris</button>
+                  <button class="chip" data-q="90210">🌴 90210</button>
+                  <button class="chip" data-q="Shibuya, Tokyo">🗼 Shibuya</button>
+                  <button class="chip" data-q="Austin, Texas">🎸 Austin</button>
+                  <button class="chip" data-q="Amsterdam">🚲 Amsterdam</button>
+               </div>
+               <p class="muted">or <a href="editor.html">build your own city</a></p>
+            </div>
+         </div>
+
+         <div id="loading" class="overlay" style="display: none">
+            <div class="card">
+               <div class="spinner"></div>
+               <p id="loadingText">Loading…</p>
+               <button id="loadingClose" style="display: none" onclick="hideLoading()">OK</button>
+            </div>
+         </div>
       </div>
-   </div>
+
+      <aside id="sidebar">
+         <div id="simControls">
+            <button class="primary" onclick="nextGeneration()" title="Keep the best brain and start the next generation now"><span class="icon">🧬</span>Evolve now</button>
+            <button onclick="restart()" title="Restart this generation"><span class="icon">🔁</span>Try again</button>
+            <button id="autoBtn" onclick="toggleAuto()" title="Automatically evolve when every car has crashed or got stuck"><span class="icon">♾️</span>Auto-evolve</button>
+            <button id="trafficBtn" onclick="toggleTraffic()" title="Turn traffic on or off"><span class="icon">🚙</span>Traffic</button>
+            <button id="manualBtn" onclick="toggleManual()" title="Drive yourself with arrow keys / WASD"><span class="icon">🕹️</span>Drive myself</button>
+            <button onclick="discardBrain()" title="Forget everything learned and start from scratch"><span class="icon">🧹</span>Forget brain</button>
+         </div>
+         <div id="stats"></div>
+         <canvas id="networkCanvas"></canvas>
+         <canvas id="miniMapCanvas"></canvas>
+      </aside>
+   </main>
 
    <script src="js/math/utils.js"></script>
+   <script src="js/math/spatialGrid.js"></script>
    <script src="js/math/graph.js"></script>
    <script src="js/math/osm.js"></script>
    <script src="js/math/worldGenerator.js"></script>
@@ -77,193 +89,411 @@ out skel;</pre>
    <script src="js/markings/light.js"></script>
    <script src="js/markings/start.js"></script>
    <script src="js/markings/target.js"></script>
-   <script src="js/editors/graphEditor.js"></script>
-   <script src="js/editors/markingEditor.js"></script>
-   <script src="js/editors/stopEditor.js"></script>
-   <script src="js/editors/yieldEditor.js"></script>
-   <script src="js/editors/crossingEditor.js"></script>
-   <script src="js/editors/parkingEditor.js"></script>
-   <script src="js/editors/lightEditor.js"></script>
-   <script src="js/editors/startEditor.js"></script>
-   <script src="js/editors/targetEditor.js"></script>
    <script src="js/viewport.js"></script>
    <script src="js/world.js"></script>
+   <script src="js/places.js"></script>
+   <script src="js/placeSearch.js"></script>
+   <script src="js/miniMap.js"></script>
+   <script src="js/car/controls.js"></script>
+   <script src="js/car/sensor.js"></script>
+   <script src="js/car/network.js"></script>
+   <script src="js/car/car.js"></script>
+   <script src="js/car/trafficCar.js"></script>
+   <script src="js/car/visualizer.js"></script>
    <script>
-      myCanvas.width = 600;
-      myCanvas.height = 600;
+      const N = 100; // learning cars per generation
+      const MUTATION = 0.1; // how much each copy of the best brain is changed
+      const TRAFFIC_COUNT = 30;
+      const STUCK_FRAMES = 300; // no progress for 5 s = out of this generation
+      const GENERATION_FRAMES = 60 * 90; // a generation lasts at most 90 s
 
-      const ctx = myCanvas.getContext("2d");
+      const carCtx = carCanvas.getContext("2d");
+      const networkCtx = networkCanvas.getContext("2d");
 
-      let saved = null;
+      const viewport = new Viewport(carCanvas, 2);
+      const miniMap = new MiniMap(miniMapCanvas, new Graph(), 300);
+
+      let world = null;
+      let borderGrid = null;
+      let network = null;
+      let start = null;
+
+      let cars = [];
+      let traffic = [];
+      let bestCar = null;
+      let frame = 0;
+      let evolveCountdown = -1;
+
+      let manual = false;
+      let autoEvolve = getSaved("autoEvolve") != "off";
+      let trafficOn = getSaved("trafficOn") != "off";
+      autoBtn.classList.toggle("active", autoEvolve);
+      trafficBtn.classList.toggle("active", trafficOn);
+
+      resize();
+      window.addEventListener("resize", resize);
+
+      new PlaceSearch({
+         form: searchForm,
+         input: searchInput,
+         sizeSelect,
+         results: searchResults,
+         onPick: loadPlace,
+      });
+      for (const chip of document.querySelectorAll(".chip")) {
+         chip.addEventListener("click", () => {
+            searchInput.value = chip.dataset.q;
+            searchForm.requestSubmit();
+         });
+      }
+
+      let info = null;
       try {
-         saved = JSON.parse(localStorage.getItem("world"));
+         info = JSON.parse(localStorage.getItem("world"));
       } catch (e) {}
-
-      const world = saved ? World.load(saved) : new World(new Graph());
-      const graph = world.graph;
-      const viewport = new Viewport(myCanvas, world.zoom, world.offset);
-
-      const markingHelp =
-         "Hover near a dashed yellow line and click to place · Shift: flip direction · Right-click: remove";
-      const tools = {
-         graph: {
-            button: graphBtn,
-            editor: new GraphEditor(viewport, graph),
-            help: "Left-click: add / select point · Drag: move point · Right-click: deselect / delete point",
-         },
-         stop: { button: stopBtn, editor: new StopEditor(viewport, world), help: markingHelp },
-         yield: { button: yieldBtn, editor: new YieldEditor(viewport, world), help: markingHelp },
-         crossing: { button: crossingBtn, editor: new CrossingEditor(viewport, world), help: markingHelp },
-         parking: { button: parkingBtn, editor: new ParkingEditor(viewport, world), help: markingHelp },
-         light: { button: lightBtn, editor: new LightEditor(viewport, world), help: markingHelp },
-         start: { button: startBtn, editor: new StartEditor(viewport, world), help: markingHelp },
-         target: { button: targetBtn, editor: new TargetEditor(viewport, world), help: markingHelp },
-      };
-      let activeTool = null;
-
-      let oldGraphHash = graph.hash();
-
-      setMode("graph");
+      if (info && info.graph && info.graph.segments.length > 0) {
+         setWorld(World.load(info));
+      } else {
+         setWorld(new World(new Graph()));
+         welcome.style.display = "flex";
+      }
       animate();
 
-      function animate() {
-         viewport.reset();
-         if (graph.hash() != oldGraphHash) {
-            world.generate();
-            oldGraphHash = graph.hash();
+      // ---------- loading real places ----------
+
+      async function loadPlace(place) {
+         welcome.style.display = "none";
+         showLoading("Finding " + Places.shortName(place.name) + "…");
+         try {
+            const newWorld = await Places.loadPlace(place, showLoading);
+            try {
+               localStorage.setItem("world", JSON.stringify(newWorld));
+            } catch (e) {
+               // too big for browser storage; it still works until the page is closed
+            }
+            setWorld(newWorld);
+            hideLoading();
+         } catch (e) {
+            showLoading("😕 " + e.message, true);
          }
+      }
+
+      function showLoading(text, isError = false) {
+         loading.style.display = "flex";
+         loadingText.textContent = text;
+         loading.classList.toggle("error", isError);
+         loadingClose.style.display = isError ? "inline-flex" : "none";
+      }
+
+      function hideLoading() {
+         loading.style.display = "none";
+         if (world.graph.segments.length == 0) {
+            welcome.style.display = "flex";
+         }
+      }
+
+      // ---------- world & generations ----------
+
+      function setWorld(newWorld) {
+         world = newWorld;
+         miniMap.graph = world.graph;
+         network = new TrafficNetwork(world);
+
+         // index the road edges so each car only checks the ones near it
+         borderGrid = new SpatialGrid(250);
+         for (const seg of world.roadBorders) {
+            borderGrid.insert([seg.p1, seg.p2], SpatialGrid.boundsOfSegment(seg.p1, seg.p2));
+         }
+
+         start = findStart(world);
+         placeLabel.textContent = world.place
+            ? "📍 " + Places.shortName(world.place.name)
+            : world.graph.segments.length > 0 ? "🏗️ Your city" : "";
+         restart();
+      }
+
+      // The 📍 start marking if there is one, otherwise a decent road near the middle
+      function findStart(w) {
+         const marking = w.markings.find((m) => m instanceof Start);
+         if (marking) {
+            const dir = marking.directionVector;
+            return { point: marking.center, angle: -angle(dir) - Math.PI / 2 };
+         }
+         if (w.graph.segments.length == 0) {
+            return { point: new Point(0, 0), angle: 0 };
+         }
+         const center = w.source == "osm"
+            ? new Point(0, 0)
+            : scale(w.graph.points.reduce((c, p) => add(c, p), new Point(0, 0)), 1 / w.graph.points.length);
+         const roads = w.graph.segments.filter((s) => s.length() > w.roadWidth * 2.5);
+         const pool = roads.length > 0 ? roads : w.graph.segments;
+         let best = pool[0];
+         for (const s of pool) {
+            if (distance(average(s.p1, s.p2), center) < distance(average(best.p1, best.p2), center)) {
+               best = s;
+            }
+         }
+         const dir = best.directionVector();
+         let point = average(best.p1, best.p2);
+         if (!best.oneWay) {
+            point = add(point, scale(perpendicular(dir), w.roadWidth / 4)); // right lane
+         }
+         return { point, angle: -angle(dir) - Math.PI / 2 };
+      }
+
+      function restart() {
+         const type = manual ? "KEYS" : "AI";
+         cars = [];
+         for (let i = 0; i < (manual ? 1 : N); i++) {
+            const car = new Car(start.point.x, start.point.y, 30, 50, type, start.angle, 4, "#2266dd");
+            car.lastImprovement = 0;
+            cars.push(car);
+         }
+
+         const saved = loadBrain();
+         if (!manual && saved) {
+            for (let i = 0; i < cars.length; i++) {
+               cars[i].brain = JSON.parse(saved);
+               if (i != 0) {
+                  NeuralNetwork.mutate(cars[i].brain, MUTATION);
+               }
+            }
+         }
+
+         traffic = trafficOn && !isEmpty() ? spawnTraffic() : [];
+         bestCar = cars[0];
+         world.cars = cars;
+         world.traffic = traffic;
+         world.bestCar = bestCar;
+         frame = 0;
+         evolveCountdown = -1;
+      }
+
+      function isEmpty() {
+         return world.graph.segments.length == 0;
+      }
+
+      function spawnTraffic() {
+         const list = [];
+         for (let i = 0; i < TRAFFIC_COUNT; i++) {
+            const car = spawnTrafficCar(start.point, 350, 2500, list);
+            if (car) {
+               list.push(car);
+            }
+         }
+         return list;
+      }
+
+      function spawnTrafficCar(around, minDist, maxDist, others) {
+         for (let tries = 0; tries < 10; tries++) {
+            const edge = network.randomEdgeNear(around, minDist, maxDist);
+            if (!edge) {
+               return null;
+            }
+            const car = new TrafficCar(network, edge);
+            if (others.every((o) => distance(o, car) > 90)) {
+               return car;
+            }
+         }
+         return null;
+      }
+
+      // Brains from older versions may have a different shape; ignore those
+      function loadBrain() {
+         const saved = getSaved("bestBrain");
+         if (!saved) {
+            return null;
+         }
+         try {
+            const brain = JSON.parse(saved);
+            const probe = new Car(0, 0, 30, 50, "AI");
+            const ok =
+               brain.levels.length == probe.brain.levels.length &&
+               brain.levels.every((l, i) => l.inputs.length == probe.brain.levels[i].inputs.length);
+            return ok ? saved : null;
+         } catch (e) {
+            return null;
+         }
+      }
+
+      function nextGeneration() {
+         if (manual || isEmpty()) {
+            return;
+         }
+         setSaved("bestBrain", JSON.stringify(bestCar.brain));
+         setSaved("generation", String(getGeneration() + 1));
+         if (bestCar.fitness > getRecord()) {
+            setSaved("record", String(Math.round(bestCar.fitness)));
+         }
+         restart();
+      }
+
+      function discardBrain() {
+         if (!confirm("Forget everything the cars have learned?")) {
+            return;
+         }
+         setSaved("bestBrain", null);
+         setSaved("generation", null);
+         setSaved("record", null);
+         restart();
+      }
+
+      function toggleManual() {
+         manual = !manual;
+         manualBtn.classList.toggle("active", manual);
+         restart();
+      }
+
+      function toggleAuto() {
+         autoEvolve = !autoEvolve;
+         autoBtn.classList.toggle("active", autoEvolve);
+         setSaved("autoEvolve", autoEvolve ? "on" : "off");
+      }
+
+      function toggleTraffic() {
+         trafficOn = !trafficOn;
+         trafficBtn.classList.toggle("active", trafficOn);
+         setSaved("trafficOn", trafficOn ? "on" : "off");
+         traffic = trafficOn && !isEmpty() ? spawnTraffic() : [];
+         world.traffic = traffic;
+      }
+
+      // ---------- main loop ----------
+
+      function animate() {
+         world.update();
+         frame++;
+
+         for (const car of traffic) {
+            car.update(traffic);
+         }
+         // keep traffic around the action: recycle cars that got lost or far away
+         if (frame % 30 == 0 && traffic.length > 0) {
+            for (let i = 0; i < traffic.length; i++) {
+               const t = traffic[i];
+               if (t.lost || distance(t, bestCar) > 3000) {
+                  const replacement = spawnTrafficCar(bestCar, 1000, 2500, traffic);
+                  if (replacement) {
+                     traffic[i] = replacement;
+                  }
+               }
+            }
+         }
+
+         for (const car of cars) {
+            if (car.damaged || isEmpty()) {
+               continue;
+            }
+            const near = SpatialGrid.boundsAround(car, 250);
+            const borders = [...borderGrid.query(near)];
+            const nearbyTraffic = traffic.filter(
+               (t) => Math.abs(t.x - car.x) < 250 && Math.abs(t.y - car.y) < 250
+            );
+            car.update(borders, nearbyTraffic);
+
+            // fitness = how far from the start the car has managed to get
+            const d = distance(car, start.point);
+            if (d > car.fitness + 1) {
+               car.fitness = d;
+               car.lastImprovement = frame;
+            } else if (!manual && frame - car.lastImprovement > STUCK_FRAMES) {
+               car.damaged = true; // stuck or going in circles
+            }
+         }
+
+         bestCar = cars.reduce((best, car) => (car.fitness > best.fitness ? car : best));
+         world.bestCar = bestCar;
+
+         const alive = cars.filter((c) => !c.damaged).length;
+         if (!manual && autoEvolve && !isEmpty() && evolveCountdown < 0 &&
+            (alive == 0 || frame > GENERATION_FRAMES)) {
+            evolveCountdown = 45; // short pause so you can see what happened
+         }
+         if (evolveCountdown > 0) {
+            evolveCountdown--;
+            if (evolveCountdown == 0) {
+               nextGeneration();
+            }
+         }
+
+         // camera follows the best car
+         viewport.offset.x = -bestCar.x;
+         viewport.offset.y = -bestCar.y;
+         viewport.reset();
          const viewPoint = scale(viewport.getOffset(), -1);
-         world.draw(ctx, viewPoint, true, viewport.getRenderRadius());
-         ctx.globalAlpha = 0.3;
-         activeTool.editor.display();
-         ctx.globalAlpha = 1;
+         world.draw(carCtx, viewPoint, false, viewport.getRenderRadius());
+         miniMap.update(viewPoint, cars);
+
+         networkCtx.clearRect(0, 0, networkCanvas.width, networkCanvas.height);
+         Visualizer.drawNetwork(networkCtx, bestCar.brain);
+
+         updateStats(alive);
          requestAnimationFrame(animate);
       }
 
-      function setMode(mode) {
-         for (const tool of Object.values(tools)) {
-            tool.button.classList.remove("active");
-            tool.editor.disable();
+      function updateStats(alive) {
+         if (isEmpty()) {
+            stats.innerHTML = "Search for a place to start.";
+            return;
          }
-         activeTool = tools[mode];
-         activeTool.button.classList.add("active");
-         activeTool.editor.enable();
-         help.textContent =
-            activeTool.help + " · Middle-drag or Alt+drag: pan · Wheel: zoom";
-      }
-
-      function dispose() {
-         tools.graph.editor.dispose();
-         world.markings.length = 0;
-      }
-
-      function save() {
-         world.zoom = viewport.zoom;
-         world.offset = viewport.offset;
-         try {
-            localStorage.setItem("world", JSON.stringify(world));
-            return true;
-         } catch (e) {
-            alert(
-               "Could not save to the browser (the map may be too big): " +
-                  e.message + "\nUse ⬇️ to download it as a file instead."
-            );
-            return false;
+         if (manual) {
+            stats.innerHTML = "🕹️ You're driving: arrow keys / WASD<br>Distance: " + meters(bestCar.fitness);
+            return;
          }
+         const record = Math.max(getRecord(), bestCar.fitness);
+         let html =
+            "<b>Generation " + getGeneration() + "</b> · " + alive + "/" + cars.length + " driving" +
+            "<br>Best this round: " + meters(bestCar.fitness) + " · record " + meters(record);
+         if (evolveCountdown > 0) {
+            html += "<br>🧬 Evolving…";
+         } else if (alive == 0) {
+            html += "<br>Everyone crashed. Press 🧬 Evolve now.";
+         }
+         stats.innerHTML = html;
       }
 
-      function download() {
-         world.zoom = viewport.zoom;
-         world.offset = viewport.offset;
-         const element = document.createElement("a");
-         element.setAttribute(
-            "href",
-            "data:application/json;charset=utf-8," +
-               encodeURIComponent(JSON.stringify(world))
+      function meters(units) {
+         return Math.round(units / Osm.UNITS_PER_METER) + " m";
+      }
+
+      function resize() {
+         const sidebarWidth = 300;
+         carCanvas.width = stage.clientWidth;
+         carCanvas.height = stage.clientHeight;
+         viewport.center = new Point(carCanvas.width / 2, carCanvas.height / 2);
+         networkCanvas.width = sidebarWidth;
+         networkCanvas.height = Math.max(
+            180,
+            sidebar.clientHeight - 300 - simControls.offsetHeight - stats.offsetHeight
          );
-         element.setAttribute("download", "name.world");
-         element.click();
       }
 
-      function load(event) {
-         const file = event.target.files[0];
-         if (!file) {
-            return;
-         }
-         const reader = new FileReader();
-         reader.onload = (evt) => {
-            try {
-               const info = JSON.parse(evt.target.result);
-               localStorage.setItem("world", JSON.stringify(info));
-               location.reload();
-            } catch (e) {
-               alert("Could not load that file: " + e.message);
-            }
-         };
-         reader.readAsText(file);
-      }
+      // ---------- storage helpers ----------
 
-      function goToSimulator() {
-         if (save()) {
-            location.href = "simulator.html";
-         }
-      }
-
-      function generateRandomWorld() {
-         if (
-            graph.segments.length > 0 &&
-            !confirm("Replace the current world with a random one?")
-         ) {
-            return;
-         }
-         const result = WorldGenerator.generateGraph();
-         tools.graph.editor.dispose();
-         world.markings.length = 0;
-         graph.points = result.points;
-         graph.segments = result.segments;
-         world.generate();
-         oldGraphHash = graph.hash();
-         world.markings.push(...WorldGenerator.generateMarkings(world));
-
-         // fit the whole map in view
-         const xs = graph.points.map((p) => p.x);
-         const ys = graph.points.map((p) => p.y);
-         const minX = Math.min(...xs), maxX = Math.max(...xs);
-         const minY = Math.min(...ys), maxY = Math.max(...ys);
-         viewport.offset = new Point(-(minX + maxX) / 2, -(minY + maxY) / 2);
-         const extent = Math.max(maxX - minX, maxY - minY) + world.roadWidth * 4;
-         viewport.zoom = Math.max(1, Math.min(5, extent / myCanvas.width));
-
-         setMode("graph");
-      }
-
-      function openOsmPanel() {
-         osmPanel.style.display = "block";
-      }
-
-      function closeOsmPanel() {
-         osmPanel.style.display = "none";
-      }
-
-      function parseOsmData() {
-         if (osmDataContainer.value == "") {
-            alert("Paste data first");
-            return;
-         }
-         let result;
+      function getSaved(key) {
          try {
-            result = Osm.parseRoads(JSON.parse(osmDataContainer.value));
+            return localStorage.getItem(key);
          } catch (e) {
-            alert("That doesn't look like Overpass JSON: " + e.message);
-            return;
+            return null;
          }
-         tools.graph.editor.dispose();
-         world.markings.length = 0;
-         graph.points = result.points;
-         graph.segments = result.segments;
-         viewport.zoom = 5;
-         viewport.offset = new Point(0, 0);
-         closeOsmPanel();
+      }
+
+      function setSaved(key, value) {
+         try {
+            if (value == null) {
+               localStorage.removeItem(key);
+            } else {
+               localStorage.setItem(key, value);
+            }
+         } catch (e) {}
+      }
+
+      function getGeneration() {
+         return Number(getSaved("generation")) || 1;
+      }
+
+      function getRecord() {
+         return Number(getSaved("record")) || 0;
       }
    </script>
 </body>

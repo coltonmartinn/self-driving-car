@@ -16,17 +16,23 @@ class World {
       this.spacing = spacing;
       this.treeSize = treeSize;
 
+      // "generated": buildings are placed along the roads automatically
+      // "osm": real building footprints imported from OpenStreetMap
+      this.source = "generated";
+      this.place = null; // { name, lat, lon, radius } for real places
+
       this.envelopes = [];
       this.roadBorders = [];
       this.buildings = [];
       this.trees = [];
-      this.laneGuides = [];
+      this.laneGuides = null; // computed on demand, see getLaneGuides()
 
       this.markings = [];
 
       // runtime-only state (not saved)
       this.cars = [];
       this.bestCar = null;
+      this.traffic = [];
       this.frameCount = 0;
       this.intersections = [];
 
@@ -46,6 +52,8 @@ class World {
          "buildingMinLength",
          "spacing",
          "treeSize",
+         "source",
+         "place",
       ]) {
          if (info[key] !== undefined) {
             world[key] = info[key];
@@ -55,25 +63,21 @@ class World {
       world.zoom = info.zoom || 1;
       world.offset = info.offset ? new Point(info.offset.x, info.offset.y) : null;
 
-      const loadSeg = (s) =>
-         new Segment(new Point(s.p1.x, s.p1.y), new Point(s.p2.x, s.p2.y), s.oneWay);
-
-      if (info.envelopes) {
-         world.envelopes = info.envelopes.map((e) => Envelope.load(e));
-         world.roadBorders = info.roadBorders.map(loadSeg);
+      // road shapes are cheap to rebuild, so they aren't saved
+      world.generateRoads();
+      if (info.buildings) {
          world.buildings = info.buildings.map((b) => Building.load(b));
-         world.trees = info.trees.map((t) => Tree.load(t));
-         world.laneGuides = info.laneGuides.map(loadSeg);
-         world.#computeIntersections();
+         world.trees = (info.trees || []).map((t) => Tree.load(t));
       } else {
-         // older saves only had the graph
-         world.generate();
+         world.generateItems();
       }
       return world;
    }
 
    toJSON() {
       return {
+         source: this.source,
+         place: this.place,
          graph: this.graph,
          roadWidth: this.roadWidth,
          roadRoundness: this.roadRoundness,
@@ -81,11 +85,8 @@ class World {
          buildingMinLength: this.buildingMinLength,
          spacing: this.spacing,
          treeSize: this.treeSize,
-         envelopes: this.envelopes,
-         roadBorders: this.roadBorders,
          buildings: this.buildings,
          trees: this.trees,
-         laneGuides: this.laneGuides,
          markings: this.markings,
          zoom: this.zoom,
          offset: this.offset,
@@ -93,31 +94,64 @@ class World {
    }
 
    generate() {
-      this.envelopes.length = 0;
-      for (const seg of this.graph.segments) {
-         this.envelopes.push(
-            new Envelope(seg, this.roadWidth, this.roadRoundness)
-         );
-      }
+      this.generateRoads();
+      this.generateItems();
+   }
 
+   generateRoads() {
+      this.envelopes = this.graph.segments.map(
+         (seg) => new Envelope(seg, this.roadWidth, this.roadRoundness)
+      );
       this.roadBorders = Polygon.union(this.envelopes.map((e) => e.poly));
-      this.buildings = this.#generateBuildings();
-      this.trees = this.#generateTrees();
-
-      this.laneGuides = this.#generateLaneGuides();
-
+      this.laneGuides = null;
+      this.lightGroups = null;
       this.#computeIntersections();
    }
 
-   // Lines running down the middle of each lane; markings snap to these
-   #generateLaneGuides() {
-      const tmpEnvelopes = [];
-      for (const seg of this.graph.segments) {
-         tmpEnvelopes.push(
-            new Envelope(seg, this.roadWidth / 2, this.roadRoundness)
-         );
+   generateItems() {
+      if (this.source == "osm") {
+         this.buildings = this.#removeBuildingsOnRoads(this.buildings);
+      } else {
+         this.buildings = this.#generateBuildings();
       }
-      return Polygon.union(tmpEnvelopes.map((e) => e.poly));
+      this.trees = this.#generateTrees();
+   }
+
+   // Lines running down the middle of each lane; markings snap to these
+   getLaneGuides() {
+      if (!this.laneGuides) {
+         const tmpEnvelopes = this.graph.segments.map(
+            (seg) => new Envelope(seg, this.roadWidth / 2, this.roadRoundness)
+         );
+         this.laneGuides = Polygon.union(tmpEnvelopes.map((e) => e.poly));
+      }
+      return this.laneGuides;
+   }
+
+   #indexEnvelopes() {
+      const grid = new SpatialGrid(250);
+      for (const env of this.envelopes) {
+         grid.insert(env, env.poly.getBounds());
+      }
+      return grid;
+   }
+
+   // Our roads are a fixed 10 m wide, so some real buildings on narrow
+   // streets would stick into the road. Drop those.
+   #removeBuildingsOnRoads(buildings) {
+      const grid = this.#indexEnvelopes();
+      return buildings.filter((b) => {
+         for (const env of grid.query(b.base.getBounds())) {
+            if (
+               env.poly.intersectsPoly(b.base) ||
+               env.poly.containsPoint(b.base.points[0]) ||
+               b.base.containsPoint(env.skeleton.p1)
+            ) {
+               return false;
+            }
+         }
+         return true;
+      });
    }
 
    #generateBuildings() {
@@ -181,7 +215,7 @@ class World {
       return bases.map((b) => new Building(b));
    }
 
-   #generateTrees() {
+   #generateTrees(maxTrees = 400) {
       if (this.graph.segments.length == 0) {
          return [];
       }
@@ -196,22 +230,24 @@ class World {
       const top = points.reduce((m, p) => Math.min(m, p.y), Infinity);
       const bottom = points.reduce((m, p) => Math.max(m, p.y), -Infinity);
 
-      const illegalPolys = [
-         ...this.buildings.map((b) => b.base),
-         ...this.envelopes.map((e) => e.poly),
-      ];
+      const illegalPolys = new SpatialGrid(250);
+      for (const b of this.buildings) {
+         illegalPolys.insert(b.base, b.base.getBounds());
+      }
+      for (const e of this.envelopes) {
+         illegalPolys.insert(e.poly, e.poly.getBounds());
+      }
 
       const trees = [];
       let tryCount = 0;
-      while (tryCount < 100) {
+      while (tryCount < 100 && trees.length < maxTrees) {
          const p = new Point(
             lerp(left, right, Math.random()),
             lerp(bottom, top, Math.random())
          );
 
-         // only polygons whose box is nearby can matter
-         const nearbyPolys = illegalPolys.filter((poly) =>
-            poly.isNearBounds(p, this.treeSize * 2)
+         const nearbyPolys = illegalPolys.query(
+            SpatialGrid.boundsAround(p, this.treeSize * 2)
          );
 
          // not on a road or building
@@ -277,55 +313,76 @@ class World {
          return;
       }
 
-      const controlCenters = [];
-      for (const light of lights) {
-         const point = getNearestPoint(light.center, this.intersections);
-         if (!point) {
-            continue;
+      if (!this.lightGroups || this.lightGroupsFor != lights.length) {
+         const groups = new Map();
+         for (const light of lights) {
+            const point = getNearestPoint(light.center, this.intersections);
+            if (!point) {
+               continue;
+            }
+            if (!groups.has(point)) {
+               groups.set(point, []);
+            }
+            groups.get(point).push(light);
          }
-         let controlCenter = controlCenters.find((c) => c.point == point);
-         if (!controlCenter) {
-            controlCenter = { point, lights: [] };
-            controlCenters.push(controlCenter);
-         }
-         controlCenter.lights.push(light);
+         this.lightGroups = [...groups.values()];
+         this.lightGroupsFor = lights.length;
       }
 
-      const greenDuration = 2; // seconds
+      const greenDuration = 4; // seconds
       const yellowDuration = 1;
       const cycle = greenDuration + yellowDuration;
       const tick = Math.floor(this.frameCount / 60);
-      for (const center of controlCenters) {
-         const cTick = tick % (center.lights.length * cycle);
+      for (const group of this.lightGroups) {
+         const cTick = tick % (group.length * cycle);
          const greenYellowIndex = Math.floor(cTick / cycle);
          const greenYellowState = cTick % cycle < greenDuration ? "green" : "yellow";
-         for (let i = 0; i < center.lights.length; i++) {
-            center.lights[i].state = i == greenYellowIndex ? greenYellowState : "red";
+         for (let i = 0; i < group.length; i++) {
+            group[i].state = i == greenYellowIndex ? greenYellowState : "red";
          }
       }
+   }
+
+   update() {
+      this.#updateLights();
       this.frameCount++;
    }
 
    draw(ctx, viewPoint, showStartMarkings = true, renderRadius = Infinity) {
-      this.#updateLights();
+      const view = SpatialGrid.boundsAround(viewPoint, renderRadius);
+      const inView = (b) =>
+         b.left <= view.right && b.right >= view.left &&
+         b.top <= view.bottom && b.bottom >= view.top;
+      const segInView = (s) =>
+         inView(SpatialGrid.boundsOfSegment(s.p1, s.p2));
 
       for (const env of this.envelopes) {
-         env.draw(ctx, { fill: "#BBB", stroke: "#BBB", lineWidth: 15 });
+         if (inView(env.poly.getBounds())) {
+            env.draw(ctx, { fill: "#BBB", stroke: "#BBB", lineWidth: 15 });
+         }
       }
       for (const marking of this.markings) {
-         if (!(marking instanceof Start) || showStartMarkings) {
+         if (
+            (!(marking instanceof Start) || showStartMarkings) &&
+            distance(marking.center, viewPoint) < renderRadius
+         ) {
             marking.draw(ctx);
          }
       }
       for (const seg of this.graph.segments) {
-         if (!seg.oneWay) {
+         if (!seg.oneWay && segInView(seg)) {
             seg.draw(ctx, { color: "white", width: 4, dash: [10, 10] });
          }
       }
       for (const seg of this.roadBorders) {
-         seg.draw(ctx, { color: "white", width: 4 });
+         if (segInView(seg)) {
+            seg.draw(ctx, { color: "white", width: 4 });
+         }
       }
 
+      for (const car of this.traffic) {
+         car.draw(ctx);
+      }
       ctx.globalAlpha = 0.2;
       for (const car of this.cars) {
          if (car != this.bestCar) {
@@ -338,14 +395,11 @@ class World {
       }
 
       // Painter's algorithm: draw far items first so near ones cover them
-      const items = [...this.buildings, ...this.trees].filter(
-         (i) => i.base.distanceToPoint(viewPoint) < renderRadius
+      const items = [...this.buildings, ...this.trees].filter((i) =>
+         inView(i.base.getBounds())
       );
-      items.sort(
-         (a, b) =>
-            b.base.distanceToPoint(viewPoint) -
-            a.base.distanceToPoint(viewPoint)
-      );
+      const dist = new Map(items.map((i) => [i, i.base.distanceToPoint(viewPoint)]));
+      items.sort((a, b) => dist.get(b) - dist.get(a));
       for (const item of items) {
          item.draw(ctx, viewPoint);
       }

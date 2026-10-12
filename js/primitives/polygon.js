@@ -59,17 +59,17 @@ class Polygon {
 
    // Returns the outline segments of the union of all polygons
    static union(polys) {
-      Polygon.multiBreak(polys);
+      const grid = Polygon.#indexPolys(polys);
+      Polygon.multiBreak(polys, grid);
       const keptSegments = [];
       for (let i = 0; i < polys.length; i++) {
          for (const seg of polys[i].segments) {
             let keep = true;
-            for (let j = 0; j < polys.length; j++) {
-               if (i != j) {
-                  if (polys[j].containsSegment(seg)) {
-                     keep = false;
-                     break;
-                  }
+            const midpoint = average(seg.p1, seg.p2);
+            for (const j of grid.queryPoint(midpoint)) {
+               if (i != j && polys[j].containsPoint(midpoint)) {
+                  keep = false;
+                  break;
                }
             }
             if (keep) {
@@ -80,14 +80,24 @@ class Polygon {
       return keptSegments;
    }
 
-   static multiBreak(polys) {
+   static multiBreak(polys, grid = Polygon.#indexPolys(polys)) {
       for (let i = 0; i < polys.length - 1; i++) {
-         for (let j = i + 1; j < polys.length; j++) {
+         // only polygons in nearby grid cells can cross this one
+         const nearby = [...grid.query(polys[i].getBounds())]
+            .filter((j) => j > i)
+            .sort((a, b) => a - b);
+         for (const j of nearby) {
             if (polys[i].boundsOverlap(polys[j])) {
                Polygon.break(polys[i], polys[j]);
             }
          }
       }
+   }
+
+   static #indexPolys(polys) {
+      const grid = new SpatialGrid(250);
+      polys.forEach((poly, i) => grid.insert(i, poly.getBounds()));
+      return grid;
    }
 
    // Splits segments of both polygons at every point where they cross
