@@ -11,6 +11,10 @@
 //   --no-gps          cars get no GPS hints (for experiments)
 //   --seed N          random seed, for repeatable runs (default 1)
 //   --eval-every N    evaluate the champion every N generations (default 10)
+//   --trips-per-gen N score every brain on N different trips per generation
+//                     and average them (default 1). More trips = slower, but
+//                     rewards brains that drive well in general rather than
+//                     ones that got lucky on a single route.
 //   --out FILE        where to save the best brain (optional)
 //   --log FILE        CSV of per-generation results (optional)
 
@@ -21,7 +25,7 @@ const { loadApp } = require("../tests/helpers/loadApp");
 function parseArgs(argv) {
    const args = {
       generations: 100, population: 100, strategy: "crossover", mutation: 0.1,
-      gps: true, seed: 1, evalEvery: 10, out: null, log: null,
+      gps: true, seed: 1, evalEvery: 10, tripsPerGen: 1, out: null, log: null,
    };
    for (let i = 0; i < argv.length; i++) {
       const key = argv[i];
@@ -33,6 +37,7 @@ function parseArgs(argv) {
       else if (key == "--no-gps") args.gps = false;
       else if (key == "--seed") args.seed = Number(next());
       else if (key == "--eval-every") args.evalEvery = Number(next());
+      else if (key == "--trips-per-gen") args.tripsPerGen = Number(next());
       else if (key == "--out") args.out = next();
       else if (key == "--log") args.log = next();
       else throw new Error("unknown option " + key);
@@ -42,7 +47,7 @@ function parseArgs(argv) {
 
 const args = parseArgs(process.argv.slice(2));
 const app = loadApp({ seed: args.seed });
-const { World, Simulation } = app;
+const { World, Simulation, Genetics, Car } = app;
 
 const citiesDir = path.join(__dirname, "..", "data", "cities");
 const index = JSON.parse(fs.readFileSync(path.join(citiesDir, "index.json"), "utf8"));
@@ -92,22 +97,44 @@ function evaluate(brain) {
    return { arrivalRate: (arrivals / evalTrips.length) * 100, completion: completion / evalTrips.length };
 }
 
+// A car's result on one trip: % of the route driven, plus a small bonus for
+// arriving quickly
+function tripScore(sim, car) {
+   let score = sim.score(car);
+   if (car.arrived) {
+      const spare = (car.fitness - sim.trip.route.length) / sim.options.generationFrames;
+      score += 20 * spare;
+   }
+   return score;
+}
+
 const rows = [["generation", "city", "trip_m", "best_pct", "average_pct", "arrived", "eval_arrival_pct", "eval_completion_pct"]];
-let brains = null;
+// start from random brains, kept in a fixed order so each brain can be
+// scored across several trips
+let brains = Array.from({ length: args.population }, () => new Car(0, 0, 30, 50, "AI").brain);
 let bestEval = null;
 let bestBrain = null;
 const started = Date.now();
 
 for (let gen = 1; gen <= args.generations; gen++) {
-   const city = cities[(gen - 1) % cities.length];
-   const sim = city.sim;
-   sim.setTrip(sim.randomDestination());
-   runGeneration(sim, brains);
-
-   const scores = sim.cars.map((c) => sim.score(c));
+   const totals = new Array(brains.length).fill(0);
+   let arrived = 0;
+   let city = null;
+   let sim = null;
+   for (let t = 0; t < args.tripsPerGen; t++) {
+      city = cities[((gen - 1) * args.tripsPerGen + t) % cities.length];
+      sim = city.sim;
+      sim.setTrip(sim.randomDestination());
+      runGeneration(sim, brains);
+      sim.cars.forEach((car, i) => (totals[i] += tripScore(sim, car)));
+      arrived += sim.arrived;
+   }
+   const scores = totals.map((total) => Math.min(100, total / args.tripsPerGen));
    const best = Math.max(...scores);
    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-   brains = sim.breed();
+
+   const order = totals.map((_, i) => i).sort((a, b) => totals[b] - totals[a]);
+   brains = Genetics.nextGeneration(order.map((i) => brains[i]), args.population, sim.options);
 
    let evalResult = null;
    if (gen % args.evalEvery == 0 || gen == args.generations) {
@@ -124,13 +151,13 @@ for (let gen = 1; gen <= args.generations; gen++) {
    }
 
    rows.push([
-      gen, city.label, Math.round(sim.trip.route.length / 10), best.toFixed(1), avg.toFixed(1), sim.arrived,
+      gen, city.label, Math.round(sim.trip.route.length / 10), best.toFixed(1), avg.toFixed(1), arrived,
       evalResult ? evalResult.arrivalRate.toFixed(1) : "", evalResult ? evalResult.completion.toFixed(1) : "",
    ]);
    const secs = ((Date.now() - started) / 1000).toFixed(0);
    console.log(
       "gen " + String(gen).padStart(4) + "  " + city.label.padEnd(14) +
-      " best " + best.toFixed(0).padStart(3) + "%  avg " + avg.toFixed(0).padStart(3) + "%  arrived " + String(sim.arrived).padStart(3) +
+      " best " + best.toFixed(0).padStart(3) + "%  avg " + avg.toFixed(0).padStart(3) + "%  arrived " + String(arrived).padStart(3) +
       (evalResult ? "  | eval: " + evalResult.arrivalRate.toFixed(0) + "% arrive, " + evalResult.completion.toFixed(0) + "% of route" : "") +
       "  (" + secs + " s)"
    );
