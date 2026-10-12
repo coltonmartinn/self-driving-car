@@ -1,6 +1,6 @@
 // Runs one generation of learning cars in a world, with traffic and optional
 // GPS trips. No drawing and no page access, so the very same code runs in the
-// browser (index.html draws it) and headless in Node (scripts/train.js).
+// browser (lab.html and drive.html draw it) and headless in Node (scripts/train.js).
 class Simulation {
    static DEFAULTS = {
       populationSize: 100,
@@ -12,6 +12,8 @@ class Simulation {
       stuckFrames: 300, // no progress for 5 s = out of this generation
       generationFrames: 60 * 90, // a generation lasts at most 90 s
       gps: true, // false = cars get no GPS hints (for experiments)
+      trafficSpeed: null, // [min, max] cruising speed for traffic (default: TrafficCar's own)
+      playerControls: null, // manual mode: a human's PlayerControls (else the keyboard)
       random: Math.random,
    };
 
@@ -88,7 +90,8 @@ class Simulation {
 
    // brains: one per car (e.g. from breed()), or null for random brains
    startGeneration(brains = null) {
-      const type = this.manual ? "KEYS" : "AI";
+      const player = this.manual ? this.options.playerControls : null;
+      const type = player ? "PLAYER" : this.manual ? "KEYS" : "AI";
       const count = this.manual ? 1 : this.options.populationSize;
       this.cars = [];
       for (let i = 0; i < count; i++) {
@@ -96,6 +99,10 @@ class Simulation {
          if (brains && !this.manual) {
             car.brain = brains[i % brains.length];
          }
+         if (player) {
+            car.controls = player;
+         }
+         car.isPlayer = this.manual;
          this.cars.push(car);
       }
       this.traffic = this.options.trafficOn && !this.isEmpty ? this.#spawnTraffic() : [];
@@ -140,8 +147,10 @@ class Simulation {
       this.world.update();
       this.frame++;
 
+      // traffic also keeps its distance from a human driver
+      const others = this.manual ? [...this.traffic, ...this.cars] : this.traffic;
       for (const car of this.traffic) {
-         car.update(this.traffic);
+         car.update(others);
       }
       // keep traffic around the action: recycle cars that got lost or far away
       if (this.frame % 30 == 0 && this.traffic.length > 0) {
@@ -154,6 +163,9 @@ class Simulation {
                }
             }
          }
+         // lost cars that couldn't be replaced just leave
+         this.traffic = this.traffic.filter((t) => !t.lost);
+         this.world.traffic = this.traffic;
       }
 
       for (const car of this.cars) {
@@ -239,6 +251,38 @@ class Simulation {
       return true;
    }
 
+   // A new route from where `car` is now to the same destination, like a GPS
+   // recalculating after a missed turn. Returns false if there's no way.
+   reroute(car) {
+      if (!this.trip) {
+         return false;
+      }
+      const route = this.trip.route;
+      const destination = route.points[route.points.length - 1];
+      const heading = new Point(-Math.sin(car.angle), -Math.cos(car.angle));
+      const seg = getNearestSegment(car, this.world.graph.segments);
+      if (!seg) {
+         return false;
+      }
+      // continue in the direction the car is facing (and that traffic may go)
+      const forward = dot(subtract(seg.p2, seg.p1), heading) > 0 ? seg.p2 : seg.p1;
+      const backward = forward == seg.p1 ? seg.p2 : seg.p1;
+      const canGoForward = !seg.oneWay || forward == seg.p2;
+      const start = canGoForward ? forward : backward;
+      const path = start == destination
+         ? [destination]
+         : Pathfinder.shortestPath(this.world.graph, start, destination, this.adjacency);
+      if (!path) {
+         return false;
+      }
+      const newRoute = new Route([new Point(car.x, car.y), ...path]);
+      this.trip = { route: newRoute };
+      this.world.route = newRoute;
+      car.routeIndex = 0;
+      car.fitness = 0;
+      return true;
+   }
+
    clearTrip() {
       this.trip = null;
       this.world.route = null;
@@ -285,6 +329,12 @@ class Simulation {
             return null;
          }
          const car = new TrafficCar(this.network, edge);
+         if (this.options.trafficSpeed) {
+            const [min, max] = this.options.trafficSpeed;
+            car.cruiseSpeed = lerp(min, max, Math.random());
+            car.maxSpeed = car.cruiseSpeed + 0.5;
+            car.speed = car.cruiseSpeed * 0.7;
+         }
          if (others.every((o) => distance(o, car) > 90)) {
             return car;
          }

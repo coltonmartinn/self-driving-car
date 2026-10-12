@@ -36,6 +36,9 @@ const FILES = [
    "js/car/genetics.js",
    "js/simulation.js",
    "js/places.js",
+   "js/school/drivingSchool.js",
+   "js/school/coach.js",
+   "js/school/lessons.js",
 ];
 
 const EXPORTS = [
@@ -43,6 +46,7 @@ const EXPORTS = [
    "WorldGenerator", "World", "Building", "Tree", "Marking", "Stop", "Yield",
    "Crossing", "Parking", "Light", "Start", "Target", "Car", "Sensor",
    "NeuralNetwork", "Level", "TrafficCar", "TrafficNetwork", "Pathfinder", "Route", "MinHeap", "Genetics", "Simulation", "Places",
+   "DrivingSchool", "DrivingCoach", "LESSONS",
    "getIntersection", "distance", "average", "add", "subtract", "scale",
    "normalize", "angle", "lerp", "polysIntersect", "getNearestPoint",
 ];

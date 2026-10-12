@@ -9,6 +9,9 @@ class Car {
       this.acceleration = 0.2;
       this.maxSpeed = maxSpeed;
       this.friction = 0.05;
+      this.brakePower = this.acceleration; // how fast the brake slows the car
+      this.turnRate = 0.03; // radians per frame at full steering
+      this.speedSteering = false; // true = steering gets gentler at low speed, like a real car
       this.angle = angle; // 0 = facing up (-y)
       this.damaged = false;
       this.fitness = 0; // scored by the simulator (how far the car got)
@@ -16,6 +19,7 @@ class Car {
       this.lastImprovement = 0; // frame when the fitness last went up
       this.routeIndex = 0; // which piece of the trip's route the car is on
       this.color = color;
+      this.isPlayer = false; // driven by a person (traffic gives it room)
 
       this.useBrain = controlType == "AI";
 
@@ -106,7 +110,7 @@ class Car {
          this.speed += this.acceleration;
       }
       if (this.controls.reverse) {
-         this.speed -= this.acceleration;
+         this.speed -= this.speed > 0 ? this.brakePower : this.acceleration;
       }
 
       if (this.speed > this.maxSpeed) {
@@ -128,11 +132,14 @@ class Car {
 
       if (this.speed != 0) {
          const flip = this.speed > 0 ? 1 : -1; // steering reverses when backing up
+         const rate = this.speedSteering
+            ? Math.min(this.turnRate, Math.abs(this.speed) * 0.025)
+            : this.turnRate;
          if (this.controls.left) {
-            this.angle += 0.03 * flip;
+            this.angle += rate * flip;
          }
          if (this.controls.right) {
-            this.angle -= 0.03 * flip;
+            this.angle -= rate * flip;
          }
       }
 
@@ -146,6 +153,16 @@ class Car {
       }
 
       const p = this.polygon;
+      const along = (a, b, t) => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) });
+
+      // soft shadow, then the body
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      for (const q of p) {
+         ctx.lineTo(q.x + 4, q.y + 5);
+      }
+      ctx.fill();
+
       ctx.beginPath();
       ctx.fillStyle = this.arrived ? "#2ecc71" : this.damaged ? "gray" : this.color;
       ctx.moveTo(p[0].x, p[0].y);
@@ -154,8 +171,33 @@ class Car {
       }
       ctx.fill();
 
+      // lights: p[0] front-right, p[1] front-left, p[2] back-left, p[3] back-right
+      const lamp = (a, b, c, color, size) => {
+         const at = along(along(a, b, 0.1), c, 0.06);
+         ctx.beginPath();
+         ctx.fillStyle = color;
+         ctx.arc(at.x, at.y, size, 0, Math.PI * 2);
+         ctx.fill();
+      };
+      if (!this.damaged) {
+         const braking = this.controls.reverse && this.speed > 0;
+         const brake = braking ? "#ff2b2b" : "rgba(150,20,20,0.9)";
+         lamp(p[2], p[3], p[1], brake, braking ? 5 : 3.5);
+         lamp(p[3], p[2], p[0], brake, braking ? 5 : 3.5);
+         const signal = this.controls.signal;
+         if (signal && Math.floor(Date.now() / 350) % 2 == 0) {
+            const amber = "#ffb020";
+            if (signal == "left") {
+               lamp(p[1], p[0], p[2], amber, 5);
+               lamp(p[2], p[3], p[1], amber, 5);
+            } else {
+               lamp(p[0], p[1], p[3], amber, 5);
+               lamp(p[3], p[2], p[0], amber, 5);
+            }
+         }
+      }
+
       // windshield, between the front and the middle of the car
-      const along = (a, b, t) => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) });
       const w = [
          along(p[0], p[3], 0.2),
          along(p[1], p[2], 0.2),

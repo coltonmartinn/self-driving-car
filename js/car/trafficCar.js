@@ -67,6 +67,7 @@ class TrafficCar extends Car {
       this.stopWait = 0;
       this.blockedFrames = 0;
       this.ghostFrames = 0;
+      this.playerWait = 0; // frames spent waiting on a stopped human driver
    }
 
    heading() {
@@ -153,23 +154,26 @@ class TrafficCar extends Car {
       const heading = this.heading();
       const stoppingSpeed = (gap) => Math.max(0, (gap / 40) * this.cruiseSpeed);
 
-      // keep a safe distance from cars ahead in the same lane
+      // keep a safe distance from cars ahead in the same lane (a human
+      // driver is never ignored, and gets a wider berth)
       let blocked = false;
-      if (this.ghostFrames > 0) {
+      let blockedByPlayer = false;
+      const ghost = this.ghostFrames > 0;
+      if (ghost) {
          this.ghostFrames--;
-      } else {
-         for (const other of otherTraffic) {
-            if (other == this) continue;
-            const rel = new Point(other.x - this.x, other.y - this.y);
-            const along = dot(rel, heading);
-            if (along <= 0 || along > 160) continue;
-            const lateral = Math.abs(rel.x * heading.y - rel.y * heading.x);
-            if (lateral > 28) continue;
-            const limit = stoppingSpeed(along - 75);
-            if (limit < targetSpeed) {
-               targetSpeed = limit;
-               blocked = true;
-            }
+      }
+      for (const other of otherTraffic) {
+         if (other == this || (ghost && !other.isPlayer)) continue;
+         const rel = new Point(other.x - this.x, other.y - this.y);
+         const along = dot(rel, heading);
+         if (along <= 0 || along > 160) continue;
+         const lateral = Math.abs(rel.x * heading.y - rel.y * heading.x);
+         if (lateral > (other.isPlayer ? 45 : 28)) continue;
+         const limit = stoppingSpeed(along - 75);
+         if (limit < targetSpeed) {
+            targetSpeed = limit;
+            blocked = true;
+            blockedByPlayer = other.isPlayer && Math.abs(other.speed) < 0.1;
          }
       }
 
@@ -212,6 +216,13 @@ class TrafficCar extends Car {
          }
       } else {
          this.blockedFrames = 0;
+      }
+
+      // a car can't ghost through a person who is waiting (that would be a
+      // crash on their record), so after a while it just leaves the road
+      this.playerWait = blockedByPlayer && this.speed < 0.1 ? this.playerWait + 1 : 0;
+      if (this.playerWait > 240) {
+         this.lost = true;
       }
 
       this.controls.left = diff > 0.02;

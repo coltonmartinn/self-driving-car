@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+   <title>Driving School · Self-Driving City</title>
+   <meta name="description" content="Practice the rules of the road on real streets, with a coach that grades you like a driving test.">
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+   <link rel="stylesheet" href="styles.css">
+</head>
+<body class="app school">
+   <header class="topbar">
+      <a class="brand" href="index.html"><span class="logo"><span>🚗</span></span>Self-Driving City</a>
+      <nav>
+         <a href="drive.html" aria-current="page">🚦 Driving School</a>
+         <a href="lab.html">🧠 AI Lab</a>
+         <a href="editor.html">🏗️ City Builder</a>
+      </nav>
+   </header>
+
+   <main id="main">
+      <div id="stage">
+         <canvas id="carCanvas" aria-label="Map of the streets around your car"></canvas>
+
+         <div id="hud" style="display: none">
+            <div id="lessonBadge" class="hud">
+               <span class="pill" id="lessonName"></span>
+               <button class="pill" onclick="pause()" title="Pause (Esc)">⏸ Pause</button>
+            </div>
+
+            <div id="navCard" class="hud" aria-live="polite">
+               <div id="navArrow"></div>
+               <div id="navText"><b id="navTitle"></b><span id="navDistance"></span></div>
+            </div>
+
+            <div id="scoreCard" class="hud hud-panel"><b id="scoreValue">100</b><span>Score</span></div>
+
+            <div id="dash" class="hud hud-panel">
+               <div class="speedo" id="speedo"><b id="speedValue">0</b><span>MPH</span></div>
+               <div class="limit-sign" title="Speed limit">SPEED<br>LIMIT<b id="limitValue">25</b></div>
+               <div class="signals" aria-label="Turn signals">
+                  <span id="signalLeft">◀</span><span id="signalRight">▶</span>
+               </div>
+            </div>
+
+            <div id="toasts" class="hud" aria-live="polite"></div>
+
+            <div id="touchLeft" class="hud touch-controls">
+               <button data-control="left" aria-label="Steer left">◀</button>
+               <button data-control="right" aria-label="Steer right">▶</button>
+            </div>
+            <div id="touchRight" class="hud touch-controls">
+               <div class="touch-group column">
+                  <button class="small" onclick="controls.toggleSignal('left')" aria-label="Left turn signal">⬅️</button>
+                  <button class="small" onclick="controls.toggleSignal('right')" aria-label="Right turn signal">➡️</button>
+               </div>
+               <button class="pedal brake" data-control="reverse" aria-label="Brake">🛑</button>
+               <button class="pedal" data-control="forward" aria-label="Gas">⬆️</button>
+            </div>
+         </div>
+
+         <!-- choose a lesson (and where to drive) -->
+         <div id="lessonPicker" class="overlay" style="display: none">
+            <div class="card">
+               <div class="picker-head">
+                  <div>
+                     <h2>Driving School</h2>
+                     <p class="muted">Learn the rules of the road on real streets. A coach grades every drive like a road test.</p>
+                  </div>
+                  <span class="badge accent" id="progressBadge"></span>
+               </div>
+               <div class="where">
+                  <span class="label">📍 Where:</span>
+                  <div class="chips" id="cityChips"></div>
+                  <form id="searchForm" class="search-form">
+                     <input id="searchInput" type="search" placeholder="…or search your own town" autocomplete="off">
+                     <select id="sizeSelect" hidden>
+                        <option value="small">Small</option>
+                        <option value="medium" selected>Medium</option>
+                     </select>
+                     <button type="submit">Go</button>
+                     <div id="searchResults" class="search-results"></div>
+                  </form>
+               </div>
+               <div class="lesson-grid" id="lessonGrid"></div>
+            </div>
+         </div>
+
+         <!-- what you'll learn, before driving -->
+         <div id="lessonIntro" class="overlay" style="display: none">
+            <div class="card">
+               <div class="emoji-big" id="introEmoji"></div>
+               <h2 id="introTitle"></h2>
+               <p id="introSummary"></p>
+               <ul class="learn-list" id="introList"></ul>
+               <div class="keys" id="introKeys">
+                  <span><kbd>W</kbd> <kbd>↑</kbd> gas</span>
+                  <span><kbd>S</kbd> <kbd>↓</kbd> brake</span>
+                  <span><kbd>A</kbd> <kbd>D</kbd> <kbd>←</kbd> <kbd>→</kbd> steer</span>
+                  <span><kbd>Q</kbd> <kbd>E</kbd> turn signals</span>
+                  <span><kbd>Esc</kbd> pause</span>
+               </div>
+               <p class="muted" id="introLimit"></p>
+               <div class="card-actions">
+                  <button class="ghost" onclick="showPicker()">← All lessons</button>
+                  <button class="primary big" onclick="beginDrive(false)">Start driving</button>
+               </div>
+            </div>
+         </div>
+
+         <div id="pauseMenu" class="overlay" style="display: none">
+            <div class="card">
+               <h2>Paused</h2>
+               <p>Take a breath. Your drive is waiting.</p>
+               <div class="card-actions" style="justify-content: center">
+                  <button onclick="endDrive('quit')">End drive</button>
+                  <button onclick="beginDrive(true)">Restart</button>
+                  <button class="primary" onclick="resume()">Keep driving</button>
+               </div>
+            </div>
+         </div>
+
+         <div id="reportCard" class="overlay" style="display: none">
+            <div class="card">
+               <div class="report-head">
+                  <div class="grade" id="reportGrade"></div>
+                  <div>
+                     <h2 id="reportTitle"></h2>
+                     <p class="muted" id="reportSubtitle" style="margin: 4px 0 0"></p>
+                  </div>
+               </div>
+               <div class="stat-row" id="reportStats"></div>
+               <div id="reportMistakes"></div>
+               <div id="reportPraise"></div>
+               <div class="card-actions">
+                  <button class="ghost" onclick="showPicker()">All lessons</button>
+                  <button onclick="beginDrive(true)">↻ Try again</button>
+                  <button class="primary" id="nextLessonBtn" onclick="nextLesson()">Next lesson →</button>
+               </div>
+            </div>
+         </div>
+
+         <div id="loading" class="overlay" style="display: none">
+            <div class="card">
+               <div class="spinner"></div>
+               <p id="loadingText">Loading…</p>
+               <button id="loadingClose" class="primary" style="display: none" onclick="hideLoading()">OK</button>
+            </div>
+         </div>
+      </div>
+   </main>
+
+   <script src="js/math/utils.js"></script>
+   <script src="js/math/spatialGrid.js"></script>
+   <script src="js/math/pathfinding.js"></script>
+   <script src="js/math/graph.js"></script>
+   <script src="js/math/osm.js"></script>
+   <script src="js/math/worldGenerator.js"></script>
+   <script src="js/primitives/point.js"></script>
+   <script src="js/primitives/segment.js"></script>
+   <script src="js/primitives/polygon.js"></script>
+   <script src="js/primitives/envelope.js"></script>
+   <script src="js/items/building.js"></script>
+   <script src="js/items/tree.js"></script>
+   <script src="js/markings/marking.js"></script>
+   <script src="js/markings/stop.js"></script>
+   <script src="js/markings/yield.js"></script>
+   <script src="js/markings/crossing.js"></script>
+   <script src="js/markings/parking.js"></script>
+   <script src="js/markings/light.js"></script>
+   <script src="js/markings/start.js"></script>
+   <script src="js/markings/target.js"></script>
+   <script src="js/world.js"></script>
+   <script src="js/places.js"></script>
+   <script src="js/placeSearch.js"></script>
+   <script src="js/car/controls.js"></script>
+   <script src="js/car/sensor.js"></script>
+   <script src="js/car/network.js"></script>
+   <script src="js/car/car.js"></script>
+   <script src="js/car/trafficCar.js"></script>
+   <script src="js/car/genetics.js"></script>
+   <script src="js/simulation.js"></script>
+   <script src="js/school/drivingSchool.js"></script>
+   <script src="js/school/coach.js"></script>
+   <script src="js/school/lessons.js"></script>
+   <script src="js/school/playerControls.js"></script>
+   <script>
+      const ctx = carCanvas.getContext("2d");
+      const controls = new PlayerControls();
+      const params = new URLSearchParams(location.search);
+      const FEET_PER_UNIT = 3.28084 / Osm.UNITS_PER_METER;
+
+      let featuredCities = [];
+      let citySlug = null;
+      let world = null;
+      let sim = null;
+      let lesson = null;
+      let coach = null;
+      let car = null;
+      let turns = [];
+      let tripDestination = null;
+      let state = "loading"; // picker | intro | driving | paused | report | loading
+      let endTimer = -1;
+      let endReason = null;
+      let offRouteFrames = 0;
+      const camera = { x: 0, y: 0, angle: 0, zoom: 1.6 };
+
+      if (matchMedia("(pointer: coarse)").matches) {
+         document.body.classList.add("touch");
+      }
+      for (const button of document.querySelectorAll("[data-control]")) {
+         controls.bindButton(button);
+      }
+      document.addEventListener("keydown", (evt) => {
+         if ((evt.key == "Escape" || evt.key == "p" || evt.key == "P") && !evt.repeat) {
+            if (state == "driving") pause();
+            else if (state == "paused") resume();
+         }
+      });
+      document.addEventListener("visibilitychange", () => {
+         if (document.hidden && state == "driving") pause();
+      });
+
+      new PlaceSearch({
+         form: searchForm,
+         input: searchInput,
+         sizeSelect,
+         results: searchResults,
+         onPick: (place) => openWorld(() => Places.loadPlace(place, showLoading), null, place.name),
+      });
+
+      resize();
+      window.addEventListener("resize", resize);
+      init();
+      requestAnimationFrame(animate);
+
+      // ---------- cities ----------
+
+      async function init() {
+         try {
+            featuredCities = await (await fetch("data/cities/index.json")).json();
+         } catch (e) {
+            featuredCities = [];
+         }
+         // friendliest first: wide suburban streets, then busier downtowns
+         const order = ["beverly-hills", "san-francisco", "times-square", "paris", "shibuya"];
+         featuredCities.sort((a, b) => order.indexOf(a.slug) - order.indexOf(b.slug));
+
+         const wanted = params.get("city") || getSaved("school-city") || "beverly-hills";
+         const opened = await openCity(wanted);
+         if (!opened && featuredCities.length > 0) {
+            await openCity(featuredCities[0].slug);
+         }
+         const lessonId = params.get("lesson");
+         const fromLink = LESSONS.find((l) => l.id == lessonId);
+         if (fromLink && world) {
+            showIntro(fromLink);
+         } else {
+            showPicker();
+         }
+      }
+
+      function savedCustomWorld() {
+         try {
+            const info = JSON.parse(localStorage.getItem("world"));
+            return info && info.graph && info.graph.segments.length > 0 ? info : null;
+         } catch (e) {
+            return null;
+         }
+      }
+
+      async function openCity(slug) {
+         if (slug == "mine") {
+            const info = savedCustomWorld();
+            if (!info) return false;
+            return openWorld(() => Places.inBackground({ info }, () => World.load(info)), "mine", "Your city");
+         }
+         const city = featuredCities.find((c) => c.slug == slug);
+         if (!city) return false;
+         return openWorld(() => Places.loadBundledCity(city.file), slug, city.label);
+      }
+
+      async function openWorld(load, slug, label) {
+         showLoading("Loading " + Places.shortName(label) + "…");
+         try {
+            const newWorld = await load();
+            setWorld(newWorld, slug);
+            hideLoading();
+            if (state == "picker") renderPicker();
+            return true;
+         } catch (e) {
+            showLoading("😕 " + e.message, true);
+            return false;
+         }
+      }
+
+      function setWorld(newWorld, slug) {
+         world = newWorld;
+         citySlug = slug;
+         if (slug) setSaved("school-city", slug);
+         DrivingSchool.addTrafficControls(world);
+         sim = new Simulation(world, { playerControls: controls, trafficCount: 15 });
+         sim.manual = true;
+         sim.setTrafficOn(true); // background traffic while choosing a lesson
+         camera.x = sim.home.point.x;
+         camera.y = sim.home.point.y;
+         camera.zoom = 2.2;
+      }
+
+      function cityName() {
+         if (citySlug == "mine") return "your city";
+         const city = featuredCities.find((c) => c.slug == citySlug);
+         if (city) return city.label;
+         return world && world.place ? Places.shortName(world.place.name) : "this city";
+      }
+
+      // ---------- screens ----------
+
+      function show(screen) {
+         for (const el of [lessonPicker, lessonIntro, pauseMenu, reportCard]) {
+            el.style.display = el == screen ? "flex" : "none";
+         }
+      }
+
+      function showPicker() {
+         state = "picker";
+         if (sim) sim.clearTrip();
+         hud.style.display = "none";
+         controls.enabled = false;
+         renderPicker();
+         show(lessonPicker);
+      }
+
+      function renderPicker() {
+         cityChips.innerHTML = "";
+         const cities = [...featuredCities];
+         if (savedCustomWorld()) {
+            cities.push({ slug: "mine", label: "My city", emoji: "🏗️" });
+         }
+         for (const city of cities) {
+            const chip = document.createElement("button");
+            chip.className = "chip" + (city.slug == citySlug ? " active" : "");
+            chip.textContent = city.emoji + " " + city.label;
+            chip.addEventListener("click", () => openCity(city.slug));
+            cityChips.append(chip);
+         }
+         if (!citySlug && world && world.place) {
+            const chip = document.createElement("button");
+            chip.className = "chip active";
+            chip.textContent = "📍 " + Places.shortName(world.place.name);
+            cityChips.append(chip);
+         }
+
+         const progress = getProgress();
+         const passed = LESSONS.filter((l) => progress[l.id] && progress[l.id].passed).length;
+         progressBadge.textContent = passed + " of " + LESSONS.length + " lessons passed";
+
+         lessonGrid.innerHTML = "";
+         LESSONS.forEach((l, i) => {
+            const result = progress[l.id];
+            const card = document.createElement("button");
+            card.className = "lesson" + (l.id == "roadtest" ? " exam" : "");
+            const badge = !result
+               ? "<span class='badge'>New</span>"
+               : result.passed
+                  ? "<span class='badge good'>✓ " + result.grade + "</span>"
+                  : "<span class='badge bad'>Try again</span>";
+            card.innerHTML =
+               "<div class='row'><span class='emoji'>" + l.emoji + "</span>" + badge + "</div>" +
+               "<span class='step'>" + (l.id == "roadtest" ? "FINAL EXAM" : "LESSON " + (i + 1)) + "</span>" +
+               "<b>" + l.title + "</b><span class='summary'>" + l.summary + "</span>";
+            card.addEventListener("click", () => showIntro(l));
+            lessonGrid.append(card);
+         });
+      }
+
+      function showIntro(l) {
+         lesson = l;
+         tripDestination = null;
+         state = "intro";
+         hud.style.display = "none";
+         introEmoji.textContent = l.emoji;
+         introTitle.textContent = l.title;
+         introSummary.textContent = l.summary + " Driving in " + cityName() + ".";
+         introList.innerHTML = "";
+         for (const line of l.learn) {
+            const li = document.createElement("li");
+            li.textContent = line;
+            introList.append(li);
+         }
+         introKeys.style.display = document.body.classList.contains("touch") ? "none" : "flex";
+         introLimit.textContent =
+            "Speed limit " + l.speedLimit + " mph · " +
+            (l.rules ? "the coach watches " + describeRules(l.rules) : "every rule counts") + ".";
+         show(lessonIntro);
+      }
+
+      function describeRules(rules) {
+         const names = {
+            crash: "for crashes", ran_stop: "stop signs", red_light: "red lights", speeding: "speed",
+            tailgating: "following distance", no_signal: "turn signals", wrong_side: "lane position",
+         };
+         const list = rules.filter((r) => names[r]).map((r) => names[r]);
+         return list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
+      }
+
+      // ---------- driving ----------
+
+      function beginDrive(sameTrip) {
+         if (!world || !lesson) return;
+         const unitsPerMph = 1 / DrivingCoach.MPH_PER_UNIT;
+         const limit = lesson.speedLimit * unitsPerMph;
+         // traffic drives near the limit; in the following lesson a bit slower,
+         // so you catch up to it and have to keep your distance
+         const pace = lesson.id == "following" ? [0.6, 0.75] : [0.8, 1];
+         sim.options.trafficCount = lesson.traffic;
+         sim.options.trafficSpeed = [limit * pace[0], limit * pace[1]];
+
+         if (sameTrip && tripDestination) {
+            sim.setTrip(tripDestination);
+         } else {
+            showLoading("Planning your route…");
+            tripDestination = DrivingSchool.pickTrip(sim, lesson.route, 25);
+            hideLoading();
+            if (!tripDestination) {
+               showLoading("😕 Couldn't find a good route here. Try another city.", true);
+               return;
+            }
+         }
+         sim.startGeneration();
+         car = sim.cars[0];
+         car.color = "#2457f5";
+         car.acceleration = 0.025;
+         car.friction = 0.008;
+         car.brakePower = 0.05;
+         car.maxSpeed = (lesson.speedLimit + 20) * unitsPerMph;
+         car.speedSteering = true;
+         car.turnRate = 0.032;
+
+         coach = new DrivingCoach(world, car, { speedLimit: lesson.speedLimit, rules: lesson.rules });
+         turns = DrivingSchool.turnsOf(sim.trip.route, DrivingSchool.junctionsOf(world));
+         camera.x = car.x;
+         camera.y = car.y;
+         camera.angle = car.angle;
+         camera.zoom = 1.1;
+
+         controls.reset();
+         controls.enabled = true;
+         endTimer = -1;
+         endReason = null;
+         offRouteFrames = 0;
+         toasts.innerHTML = "";
+         lessonName.textContent = lesson.emoji + " " + lesson.title;
+         limitValue.textContent = lesson.speedLimit;
+         hud.style.display = "block";
+         show(null);
+         state = "driving";
+         toast({ severity: "info", title: "Follow the blue line to the 🏁", tip: "Gas to start. The coach is watching." }, 4000);
+      }
+
+      function pause() {
+         if (state != "driving") return;
+         state = "paused";
+         controls.enabled = false;
+         controls.reset();
+         show(pauseMenu);
+      }
+
+      function resume() {
+         if (state != "paused") return;
+         state = "driving";
+         controls.enabled = true;
+         show(null);
+      }
+
+      function endDrive(reason) {
+         state = "report";
+         controls.enabled = false;
+         controls.reset();
+         endReason = reason;
+         showReport();
+      }
+
+      function nextLesson() {
+         const i = LESSONS.indexOf(lesson);
+         if (i < LESSONS.length - 1) {
+            showIntro(LESSONS[i + 1]);
+         } else {
+            showPicker();
+         }
+      }
+
+      // ---------- main loop ----------
+
+      function animate() {
+         if (world && sim) {
+            if (state == "driving") {
+               sim.step();
+               for (const event of coach.update(sim.traffic)) {
+                  toast(event);
+               }
+               if (endTimer < 0 && (car.arrived || coach.finished)) {
+                  endTimer = 70; // a moment to see what happened
+               }
+               if (endTimer > 0 && --endTimer == 0) {
+                  endDrive(car.arrived ? "arrived" : "crash");
+               }
+               checkRoute();
+               followCar();
+               updateHud();
+            } else if (state != "paused" && state != "report") {
+               idle();
+            }
+            draw();
+         }
+         requestAnimationFrame(animate);
+      }
+
+      // Missed a turn? Not a safety mistake: plan a new route, like a GPS
+      function checkRoute() {
+         if (car.arrived || car.damaged) return;
+         const loc = sim.trip.route.locate(car, car.routeIndex || 0);
+         offRouteFrames = loc.distance > world.roadWidth * 1.3 ? offRouteFrames + 1 : 0;
+         if (offRouteFrames == 45) {
+            if (sim.reroute(car)) {
+               turns = DrivingSchool.turnsOf(sim.trip.route, DrivingSchool.junctionsOf(world));
+               toast({ severity: "info", title: "Rerouting…", tip: "Missed a turn? No problem, follow the new blue line." }, 3000);
+            }
+            offRouteFrames = 0;
+         }
+      }
+
+      // Behind the wheel: the view turns with the car, so "up" is always ahead
+      function followCar() {
+         const k = 0.15;
+         camera.x += (car.x - camera.x) * 0.5;
+         camera.y += (car.y - camera.y) * 0.5;
+         let diff = car.angle - camera.angle;
+         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+         camera.angle += diff * k;
+         const small = Math.min(carCanvas.width, carCanvas.height) < 600 ? 1.5 : 1; // see more on phones
+         const targetZoom = (1.1 + Math.abs(car.speed) * 0.13) * small;
+         camera.zoom += (targetZoom - camera.zoom) * 0.03;
+      }
+
+      // Between drives: traffic keeps moving and the view slowly circles
+      function idle() {
+         world.update();
+         for (const t of sim.traffic) {
+            t.update(sim.traffic);
+         }
+         world.cars = [];
+         world.bestCar = null;
+         camera.angle += 0.0015;
+      }
+
+      function draw() {
+         const w = carCanvas.width;
+         const h = carCanvas.height;
+         const driving = state == "driving" || state == "paused" || state == "report";
+         ctx.setTransform(1, 0, 0, 1, 0, 0);
+         ctx.clearRect(0, 0, w, h);
+         ctx.translate(w / 2, driving ? h * 0.64 : h / 2);
+         ctx.rotate(camera.angle);
+         ctx.scale(1 / camera.zoom, 1 / camera.zoom);
+         ctx.translate(-camera.x, -camera.y);
+         const view = new Point(camera.x, camera.y);
+         world.draw(ctx, view, false, Math.hypot(w, h) * camera.zoom + 300);
+         if (driving && car) {
+            car.draw(ctx); // on top, so tall buildings never hide you
+         }
+      }
+
+      // ---------- HUD ----------
+
+      function updateHud() {
+         const mph = Math.round(DrivingCoach.mph(car.speed));
+         speedValue.textContent = mph;
+         speedo.classList.toggle("over", mph > lesson.speedLimit + 3);
+
+         const blinkOn = Math.floor(Date.now() / 350) % 2 == 0;
+         signalLeft.classList.toggle("on", controls.signal == "left" && blinkOn);
+         signalRight.classList.toggle("on", controls.signal == "right" && blinkOn);
+
+         const score = coach.score;
+         scoreValue.textContent = score;
+         scoreValue.style.color = coach.failed ? "var(--bad)" : score >= DrivingCoach.PASS_SCORE ? "var(--good)" : "var(--warn)";
+
+         const route = sim.trip.route;
+         const step = DrivingSchool.nextInstruction(route, car.fitness, turns);
+         const titles = { left: "Turn left", right: "Turn right", uturn: "Make a U-turn", arrive: "Arrive" };
+         const far = step.kind != "arrive" && step.distance > 2500;
+         navTitle.textContent = car.arrived ? "You've arrived" : far ? "Continue straight" : titles[step.kind];
+         navDistance.textContent = car.arrived ? "Nice driving!" : (far ? "for " : "in ") + formatFeet(step.distance);
+         const arrow = car.arrived ? "arrive" : far ? "straight" : step.kind;
+         if (navArrow.dataset.kind != arrow) {
+            navArrow.dataset.kind = arrow;
+            navArrow.innerHTML = ARROWS[arrow];
+         }
+      }
+
+      function formatFeet(units) {
+         const feet = units * FEET_PER_UNIT;
+         if (feet > 1000) return (feet / 5280).toFixed(1) + " mi";
+         return Math.max(0, Math.round(feet / 10) * 10) + " ft";
+      }
+
+      const svg = (inner) =>
+         "<svg viewBox='0 0 44 44' width='44' height='44' fill='none' stroke='#fff' stroke-width='5' " +
+         "stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" + inner + "</svg>";
+      const ARROWS = {
+         straight: svg("<path d='M22 38V10'/><path d='M12 19l10-10 10 10'/>"),
+         right: svg("<path d='M14 38V24a8 8 0 0 1 8-8h14'/><path d='M28 8l8 8-8 8'/>"),
+         left: svg("<path d='M30 38V24a8 8 0 0 0-8-8H8'/><path d='M16 8l-8 8 8 8'/>"),
+         uturn: svg("<path d='M28 38V18a8 8 0 0 0-16 0v16'/><path d='M5 27l7 8 7-8'/>"),
+         arrive: "<span>🏁</span>",
+      };
+
+      function toast(event, ms) {
+         const icons = { good: "✅", minor: "⚠️", major: "⛔", critical: "❌", info: "👋" };
+         const el = document.createElement("div");
+         el.className = "toast " + event.severity;
+         const penalty = DrivingCoach.PENALTY[event.severity];
+         const note = event.severity == "good" ? "" : event.tip || "";
+         el.innerHTML =
+            "<span class='t-icon'>" + icons[event.severity] + "</span><div><b></b><small></small></div>";
+         el.querySelector("b").textContent = event.title + (penalty ? "  −" + penalty : "") +
+            (event.detail ? " · " + event.detail : "");
+         el.querySelector("small").textContent = note;
+         toasts.prepend(el);
+         while (toasts.children.length > 3) {
+            toasts.lastChild.remove();
+         }
+         const life = ms || (event.severity == "good" ? 2500 : 5500);
+         setTimeout(() => el.classList.add("leaving"), life);
+         setTimeout(() => el.remove(), life + 350);
+      }
+
+      // ---------- report card ----------
+
+      function showReport() {
+         const s = coach.summary();
+         const finished = endReason == "arrived";
+         const passed = finished && s.passed;
+         const exam = lesson.id == "roadtest";
+
+         reportGrade.textContent = finished ? s.grade : "–";
+         reportGrade.classList.toggle("fail", !passed);
+         const hitByOther = coach.events.some((e) => e.rule == "hit_by_traffic");
+         reportTitle.textContent = !finished
+            ? hitByOther ? "Another car hit you" : endReason == "crash" ? "Crash! Drive over." : "Drive ended early"
+            : passed
+               ? exam ? "You passed the road test! 🎉" : "Lesson passed! 🎉"
+               : exam ? "Not this time. You'll get it." : "Almost! Let's try that again.";
+         reportSubtitle.textContent =
+            lesson.emoji + " " + lesson.title + " · " + cityName() + " · score " + s.score + "/100" +
+            (hitByOther ? " · not your fault" : s.failed ? " · critical mistake" : passed ? "" : " · " + DrivingCoach.PASS_SCORE + " to pass");
+
+         const minutes = Math.floor(s.minutes);
+         const seconds = Math.round((s.minutes - minutes) * 60);
+         const stats = [
+            [formatFeet(s.distanceMeters * Osm.UNITS_PER_METER), "driven"],
+            [minutes + ":" + String(seconds).padStart(2, "0"), "time"],
+            [s.topSpeed + " mph", "top speed"],
+            lesson.id == "stops" ? [s.fullStops, "full stops"] : [s.signaledTurns + "/" + s.turns, "turns signaled"],
+         ];
+         reportStats.innerHTML = stats.map(([v, label]) => "<div class='stat'><b>" + v + "</b><span>" + label + "</span></div>").join("");
+
+         reportMistakes.innerHTML = s.mistakes.length == 0
+            ? "<p class='report-section'>Mistakes</p><ul class='report-list'><li>🌟 No mistakes. Clean drive!</li></ul>"
+            : "<p class='report-section'>What to work on</p><ul class='report-list'>" + groupEvents(s.mistakes).map((g) =>
+               "<li><span>" + (g.severity == "critical" ? "❌" : g.severity == "major" ? "⛔" : "⚠️") + "</span><div><b>" +
+               escapeHtml(g.title) + (g.count > 1 ? " ×" + g.count : "") + "</b><span class='tip'>" + escapeHtml(g.tip) +
+               "</span></div><span class='pts'>−" + DrivingCoach.PENALTY[g.severity] * g.count + "</span></li>").join("") + "</ul>";
+         reportPraise.innerHTML = s.praise.length == 0 ? "" :
+            "<p class='report-section'>Nice work</p><ul class='report-list'>" + groupEvents(s.praise).map((g) =>
+               "<li><span>✅</span><div><b>" + escapeHtml(g.title) + (g.count > 1 ? " ×" + g.count : "") + "</b></div></li>").join("") + "</ul>";
+
+         const i = LESSONS.indexOf(lesson);
+         nextLessonBtn.style.display = passed && i < LESSONS.length - 1 ? "" : "none";
+         if (finished) {
+            saveResult(lesson.id, s, passed);
+         }
+         show(reportCard);
+      }
+
+      function groupEvents(events) {
+         const groups = new Map();
+         for (const e of events) {
+            const g = groups.get(e.rule) || { ...e, count: 0 };
+            g.count++;
+            groups.set(e.rule, g);
+         }
+         return [...groups.values()];
+      }
+
+      function escapeHtml(text) {
+         const div = document.createElement("div");
+         div.textContent = text;
+         return div.innerHTML;
+      }
+
+      // ---------- progress ----------
+
+      function getProgress() {
+         try {
+            return JSON.parse(getSaved("school-progress")) || {};
+         } catch (e) {
+            return {};
+         }
+      }
+
+      function saveResult(id, summary, passed) {
+         const progress = getProgress();
+         const old = progress[id];
+         if (!old || summary.score > old.score || (passed && !old.passed)) {
+            progress[id] = { score: summary.score, grade: summary.grade, passed: passed || (old && old.passed) || false };
+            setSaved("school-progress", JSON.stringify(progress));
+         }
+      }
+
+      // ---------- misc ----------
+
+      function showLoading(text, isError = false) {
+         loading.style.display = "flex";
+         loadingText.textContent = text;
+         loading.classList.toggle("error", isError);
+         loadingClose.style.display = isError ? "inline-flex" : "none";
+      }
+
+      function hideLoading() {
+         loading.style.display = "none";
+      }
+
+      function resize() {
+         carCanvas.width = stage.clientWidth;
+         carCanvas.height = stage.clientHeight;
+      }
+
+      function getSaved(key) {
+         try {
+            return localStorage.getItem(key);
+         } catch (e) {
+            return null;
+         }
+      }
+
+      function setSaved(key, value) {
+         try {
+            localStorage.setItem(key, value);
+         } catch (e) {}
+      }
+   </script>
+</body>
+</html>

@@ -4,6 +4,7 @@ class Controls {
       this.left = false;
       this.right = false;
       this.reverse = false;
+      this.signal = null; // turn signal: "left", "right" or null
 
       switch (type) {
          case "KEYS":
@@ -13,6 +14,10 @@ class Controls {
             this.forward = true;
             break;
       }
+   }
+
+   cancelSignal() {
+      this.signal = null;
    }
 
    #addKeyboardListeners() {
