@@ -40,6 +40,7 @@ class World {
       this.destination = null;
       this.frameCount = 0;
       this.intersections = [];
+      this.lightTiming = { green: 4, yellow: 1 }; // seconds
 
       this.zoom = 1;
       this.offset = null;
@@ -416,8 +417,8 @@ class World {
          this.lightGroupsFor = lights.length;
       }
 
-      const greenDuration = 4; // seconds
-      const yellowDuration = 1;
+      const greenDuration = this.lightTiming.green;
+      const yellowDuration = this.lightTiming.yellow;
       const cycle = greenDuration + yellowDuration;
       const tick = Math.floor(this.frameCount / 60);
       for (const group of this.lightGroups) {

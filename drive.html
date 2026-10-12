@@ -301,6 +301,7 @@
          citySlug = slug;
          if (slug) setSaved("school-city", slug);
          DrivingSchool.addTrafficControls(world);
+         world.lightTiming = { green: 8, yellow: 3 }; // human-friendly, like real signals
          sim = new Simulation(world, { playerControls: controls, trafficCount: 15 });
          sim.manual = true;
          sim.setTrafficOn(true); // background traffic while choosing a lesson

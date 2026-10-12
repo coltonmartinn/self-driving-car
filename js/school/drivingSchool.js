@@ -22,7 +22,13 @@ const DrivingSchool = {
          const kind = ns.length >= 4 && DrivingSchool.hash(p) < 0.6 ? "light" : "stop";
          for (const first of ns) {
             const marking = DrivingSchool.approachMarking(world, neighbors, p, first, kind);
-            if (marking) {
+            // junctions a few meters apart can claim the same street: one
+            // sign or light per approach is enough
+            const duplicate = marking && [...existing, ...added].some((m) =>
+               distance(m.center, marking.center) < rw * 1.5 &&
+               dot(m.directionVector, marking.directionVector) > 0.7
+            );
+            if (marking && !duplicate) {
                added.push(marking);
             }
          }

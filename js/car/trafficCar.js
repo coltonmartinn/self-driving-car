@@ -177,14 +177,23 @@ class TrafficCar extends Car {
          }
       }
 
-      // traffic lights and signs for our direction
+      // traffic lights and signs for our direction (only the nearest light
+      // counts, like a driver watching the signal at the next stop line)
+      const ahead = [];
       for (const m of this.network.controls) {
          const rel = subtract(m.center, pos);
          const along = dot(rel, heading);
          if (along < -10 || along > 150) continue;
          if (Math.abs(rel.x * heading.y - rel.y * heading.x) > 30) continue;
          if (dot(m.directionVector, heading) < 0.7) continue;
-
+         ahead.push({ m, along });
+      }
+      const lights = ahead.filter(({ m }) => m instanceof Light);
+      const nearestLight = lights.length > 0
+         ? lights.reduce((a, b) => (b.along < a.along ? b : a)).m
+         : null;
+      for (const { m, along } of ahead) {
+         if (m instanceof Light && m != nearestLight) continue;
          const gap = along + m.height / 2 - 30; // car front to the stop line
          if (m instanceof Light) {
             if (m.state == "red" || (m.state == "yellow" && gap > 40)) {

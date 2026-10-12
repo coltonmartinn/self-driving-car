@@ -6,7 +6,7 @@ const { loadApp } = require("./helpers/loadApp");
 
 const {
    Point, Segment, Graph, World, Car, Light, Stop, Route, Simulation,
-   WorldGenerator, DrivingSchool, DrivingCoach, LESSONS,
+   WorldGenerator, DrivingSchool, DrivingCoach, LESSONS, distance,
 } = loadApp({ seed: 3 });
 
 // A road going north from (0, 0), with a road to the east at y = -1500
@@ -233,6 +233,18 @@ test("unmarked intersections get signs, the same ones every time", () => {
    const first = make();
    assert.ok(first.length > 0);
    assert.equal(make(), first);
+
+   // a real city: never two signs for the same approach
+   const file = path.join(__dirname, "..", "data", "cities", "san-francisco.json");
+   const world = World.load(JSON.parse(fs.readFileSync(file, "utf8")));
+   DrivingSchool.addTrafficControls(world);
+   const controls = world.markings.filter((m) => m instanceof Light || m instanceof Stop);
+   for (const m of controls) {
+      const twins = controls.filter((o) =>
+         o != m && distance(o.center, m.center) < world.roadWidth * 1.5 &&
+         o.directionVector.x * m.directionVector.x + o.directionVector.y * m.directionVector.y > 0.7);
+      assert.equal(twins.length, 0);
+   }
 });
 
 test("routes know their turns, and directions name the next one", () => {
