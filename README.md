@@ -42,6 +42,8 @@ Seven lessons, from your first drive to a final road test, in five real cities, 
 
 Mistakes are *minor* (−3), *major* (−10) or *critical* (fails the drive), and each comes with a tip written for new drivers. The coach is plain logic with no drawing, so all of it is unit-tested in Node.
 
+**For parents and teachers.** A progress report shows lessons passed, practice time, recent drives, and the mistakes that keep coming up, each with a tip. It prints cleanly, and a student can send it as a link. The whole report is encoded in the link, so it needs no accounts or server. Passing the road test unlocks a printable practice certificate.
+
 **Built for learning to drive.** Directions are turn-by-turn and reroute after a missed turn. The view turns with the car, so ahead is always up. US-style signs, speed limits in mph, keyboard or on-screen pedals. Progress is saved per lesson.
 
 > Practice, not a substitute: this helps you learn the rules, but it doesn't replace a licensed instructor, your state's driver's manual, or supervised hours behind the wheel.
@@ -77,7 +79,7 @@ Open http://localhost:8080. The local server proxies map downloads, which makes 
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | 59 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, and the driving coach |
+| `npm test` | 63 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, and the driving coach |
 | `npm run typecheck` | TypeScript checks the plain JavaScript (`checkJs`), with no build step |
 | `npm run lint` | ESLint |
 | `node scripts/train.js --generations 150 --trips-per-gen 3 --out brain.json` | Train a brain headless (see [experiments](docs/experiments/README.md)) |

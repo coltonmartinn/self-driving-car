@@ -1420,6 +1420,47 @@ kbd {
    color: var(--muted);
 }
 
+/* Progress report */
+.progress-card {
+   width: min(680px, 100%);
+   text-align: left !important;
+}
+
+.report-top {
+   display: flex;
+   justify-content: space-between;
+   align-items: flex-start;
+   gap: 12px;
+}
+
+.report-top h2 {
+   margin: 2px 0 0;
+}
+
+.report-top p {
+   margin: 0;
+}
+
+.lesson-table {
+   width: 100%;
+   border-collapse: collapse;
+   font-size: 14px;
+}
+
+.lesson-table th {
+   text-align: left;
+   font-size: 12px;
+   color: var(--muted);
+   font-weight: 600;
+   padding: 6px 8px;
+   border-bottom: 1px solid var(--border);
+}
+
+.lesson-table td {
+   padding: 7px 8px;
+   border-bottom: 1px solid var(--border);
+}
+
 /* Certificate */
 .certificate {
    width: min(640px, 100%);
@@ -1505,13 +1546,15 @@ button.badge {
       display: none !important;
    }
 
-   #certificate {
+   #certificate,
+   #progressReport {
       position: static;
       background: none;
       backdrop-filter: none;
    }
 
-   .certificate {
+   .certificate,
+   .progress-card {
       box-shadow: none;
       border: none;
    }

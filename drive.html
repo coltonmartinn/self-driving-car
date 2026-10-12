@@ -73,6 +73,7 @@
                   <div class="chips">
                      <span class="badge accent" id="progressBadge"></span>
                      <button class="badge good" id="certifiedBtn" onclick="showCertificate()" style="display: none">🎓 Certificate</button>
+                     <button class="badge" onclick="showProgress()">📋 Progress report</button>
                   </div>
                </div>
                <div class="where">
@@ -167,6 +168,32 @@
             </div>
          </div>
 
+         <div id="progressReport" class="overlay" style="display: none">
+            <div class="card progress-card">
+               <div class="report-top">
+                  <div>
+                     <p class="cert-kicker">Driving School progress report</p>
+                     <h2 id="progName"></h2>
+                     <p class="muted" id="progSub"></p>
+                  </div>
+                  <span class="logo"><span>🚗</span></span>
+               </div>
+               <div class="stat-row" id="progStats"></div>
+               <p class="report-section">Lessons</p>
+               <table class="lesson-table" id="progLessons"></table>
+               <p class="report-section">Focus areas</p>
+               <ul class="report-list" id="progFocus"></ul>
+               <p class="report-section">Recent drives</p>
+               <table class="lesson-table" id="progRecent"></table>
+               <p class="cert-note" id="progNote"></p>
+               <div class="card-actions no-print">
+                  <button class="ghost" onclick="closeProgress()">Close</button>
+                  <button id="progShareBtn" onclick="shareProgress()">🔗 Copy link for a parent or teacher</button>
+                  <button class="primary" onclick="window.print()">🖨️ Print</button>
+               </div>
+            </div>
+         </div>
+
          <div id="loading" class="overlay" style="display: none">
             <div class="card">
                <div class="spinner"></div>
@@ -213,6 +240,7 @@
    <script src="js/school/lessons.js"></script>
    <script src="js/school/playerControls.js"></script>
    <script src="js/school/sounds.js"></script>
+   <script src="js/school/progress.js"></script>
    <script>
       const ctx = carCanvas.getContext("2d");
       const controls = new PlayerControls();
@@ -283,6 +311,14 @@
          if (!opened && featuredCities.length > 0) {
             await openCity(featuredCities[0].slug);
          }
+         if (location.hash.startsWith("#report=")) {
+            try {
+               showProgress(Progress.decode(location.hash.slice("#report=".length)));
+               return;
+            } catch (e) {
+               // a broken link: fall through to the lessons
+            }
+         }
          const lessonId = params.get("lesson");
          const fromLink = LESSONS.find((l) => l.id == lessonId);
          if (fromLink && world) {
@@ -351,7 +387,7 @@
       // ---------- screens ----------
 
       function show(screen) {
-         for (const el of [lessonPicker, lessonIntro, pauseMenu, reportCard, certificate]) {
+         for (const el of [lessonPicker, lessonIntro, pauseMenu, reportCard, certificate, progressReport]) {
             el.style.display = el == screen ? "flex" : "none";
          }
       }
@@ -726,8 +762,91 @@
             saveResult(lesson.id, s, passed);
             sounds.finish(passed);
          }
+         if (coach.frame > 300) {
+            // every real attempt counts toward the progress report
+            const drive = Progress.record(lesson, s, { ended: endReason, city: cityName() });
+            setSaved("school-history", JSON.stringify(Progress.add(getHistory(), drive)));
+         }
          certificateBtn.style.display = passed && exam ? "" : "none";
          show(reportCard);
+      }
+
+      // ---------- progress report (for parents and teachers) ----------
+
+      function getHistory() {
+         try {
+            const h = JSON.parse(getSaved("school-history"));
+            return Array.isArray(h) ? h : [];
+         } catch (e) {
+            return [];
+         }
+      }
+
+      let sharedReport = null; // { name, history } when opened from a link
+
+      function showProgress(shared = null) {
+         sharedReport = shared;
+         const history = shared ? shared.history : getHistory();
+         const name = shared ? shared.name : getSaved("school-name") || "";
+         const r = Progress.summarize(history, LESSONS, DrivingCoach.RULES);
+         progName.textContent = name || "Student driver";
+         progSub.textContent = (shared ? "Shared report" : "This device") + " · " +
+            new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+         progStats.innerHTML = [
+            [r.lessonsPassed + "/" + r.lessonCount, "lessons passed"],
+            [r.drives, "drives"],
+            [r.minutes + " min", "practice"],
+            [r.roadTestPassed ? "✓ Passed" : "Not yet", "road test"],
+         ].map(([v, label]) => "<div class='stat'><b>" + v + "</b><span>" + label + "</span></div>").join("");
+
+         progLessons.innerHTML = "<tr><th>Lesson</th><th>Tries</th><th>Best</th><th></th></tr>" + r.lessons.map((l) =>
+            "<tr><td>" + l.emoji + " " + escapeHtml(l.title) + "</td><td>" + l.attempts + "</td><td>" +
+            (l.best == null ? "–" : l.best) + "</td><td>" +
+            (l.passed ? "<span class='badge good'>Passed</span>" : l.attempts ? "<span class='badge'>Practicing</span>" : "") +
+            "</td></tr>").join("");
+
+         progFocus.innerHTML = r.focus.length == 0
+            ? "<li>" + (r.drives ? "🌟 No repeat mistakes yet." : "No drives yet. Start with lesson 1!") + "</li>"
+            : r.focus.map((f) =>
+               "<li><span>" + (f.severity == "critical" ? "❌" : f.severity == "major" ? "⛔" : "⚠️") + "</span><div><b>" +
+               escapeHtml(f.title) + " ×" + f.count + "</b><span class='tip'>" + escapeHtml(f.tip) + "</span></div></li>").join("");
+
+         const ended = { arrived: "Finished", crash: "Crashed", quit: "Stopped early" };
+         progRecent.innerHTML = r.recent.length == 0 ? "" :
+            "<tr><th>When</th><th>Lesson</th><th>Where</th><th>Result</th></tr>" + r.recent.map((d) => {
+               const l = LESSONS.find((x) => x.id == d.lesson);
+               return "<tr><td>" + new Date(d.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
+                  "</td><td>" + (l ? l.emoji + " " + escapeHtml(l.title) : "") + "</td><td>" + escapeHtml(d.city || "") +
+                  "</td><td>" + (d.ended == "arrived" ? d.score + "/100" + (d.passed ? " ✓" : "") : ended[d.ended]) + "</td></tr>";
+            }).join("");
+
+         progNote.textContent = shared
+            ? "This report was shared from the student's device. Practice in a simulator doesn't replace supervised driving."
+            : "Scores are saved on this device. Practice in a simulator doesn't replace supervised driving.";
+         progShareBtn.style.display = shared || r.drives == 0 ? "none" : "";
+         show(progressReport);
+      }
+
+      function closeProgress() {
+         if (sharedReport) {
+            history.replaceState(null, "", location.pathname);
+            sharedReport = null;
+         }
+         showPicker();
+      }
+
+      function shareProgress() {
+         const name = getSaved("school-name") || prompt("Your name, for the report:") || "";
+         if (name) setSaved("school-name", name);
+         const url = location.origin + location.pathname + "#report=" + Progress.encode(name, getHistory());
+         if (navigator.clipboard) {
+            navigator.clipboard.writeText(url).then(
+               () => { progShareBtn.textContent = "✓ Link copied"; },
+               () => prompt("Copy this link:", url)
+            );
+         } else {
+            prompt("Copy this link:", url);
+         }
       }
 
       // ---------- certificate ----------
