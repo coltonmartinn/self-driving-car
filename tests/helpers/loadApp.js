@@ -48,8 +48,9 @@ const EXPORTS = [
 ];
 
 // seed: makes Math.random (inside the app only) repeatable, for experiments
-function loadApp({ seed = null } = {}) {
-   const context = vm.createContext({ console });
+// globals: extra things the scripts can see (e.g. a fake fetch for tests)
+function loadApp({ seed = null, globals = {} } = {}) {
+   const context = vm.createContext({ console, ...globals });
    if (seed != null) {
       // mulberry32: a small, fast, well-distributed seeded generator
       vm.runInContext(

@@ -115,33 +115,47 @@ const Places = {
          }
          return await res.json();
       }
-      let lastError = null;
-      for (let i = 0; i < Places.OVERPASS_SERVERS.length; i++) {
-         const url = Places.OVERPASS_SERVERS[i];
-         if (i > 0) {
-            onStatus("Map server busy, trying another one (" + (i + 1) + "/" + Places.OVERPASS_SERVERS.length + ")…");
-         }
-         try {
-            const res = await Places.fetchWithTimeout(
-               url,
-               {
-                  method: "POST",
-                  headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                  body,
-               },
-               90000
-            );
-            if (!res.ok) throw new Error(url + " answered " + res.status);
-            return await res.json();
-         } catch (e) {
-            lastError = e;
-         }
+      // No proxy: ask every map server at once and take the first good
+      // answer, cancelling the others. (Some refuse browser requests or are
+      // overloaded; asking one at a time could mean minutes of waiting.)
+      const controllers = Places.OVERPASS_SERVERS.map(() => new AbortController());
+      const timer = setTimeout(() => controllers.forEach((c) => c.abort()), 90000);
+      const errors = [];
+      let pending = Places.OVERPASS_SERVERS.length;
+      try {
+         return await Promise.any(
+            Places.OVERPASS_SERVERS.map(async (url, i) => {
+               try {
+                  const res = await fetch(url, {
+                     method: "POST",
+                     headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                     body,
+                     signal: controllers[i].signal,
+                  });
+                  if (!res.ok) throw new Error(new URL(url).host + " answered " + res.status);
+                  const json = await res.json();
+                  controllers.forEach((c, j) => j != i && c.abort());
+                  return json;
+               } catch (e) {
+                  errors.push(e.message);
+                  pending--;
+                  if (pending > 0) {
+                     onStatus("Map server busy, waiting for the other " + pending + "…");
+                  }
+                  throw e;
+               }
+            })
+         );
+      } catch (e) {
+         throw new Error(
+            "Couldn't download the map (" + errors.join("; ") + "). " +
+               "Map servers often refuse requests straight from a browser: run the app locally with " +
+               "'node server.js' (or double-click start.bat) and open http://localhost:8080, " +
+               "or pick one of the featured cities."
+         );
+      } finally {
+         clearTimeout(timer);
       }
-      throw new Error(
-         "Couldn't download the map (" + lastError.message + "). " +
-            "Map servers often refuse requests straight from a browser: start the app with " +
-            "'node server.js' (or double-click start.bat) and open http://localhost:8080."
-      );
    },
 
    // place = { name, lat, lon, radius }
