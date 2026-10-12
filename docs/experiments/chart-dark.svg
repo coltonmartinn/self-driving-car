@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 380" width="760" height="380" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Line chart of held-out route completion per generation for each training setup">
+<rect width="760" height="380" rx="12" fill="#1a1a19"/>
+<text x="24" y="30" font-size="16" font-weight="600" fill="#ffffff">Held-out route completion during training</text>
+<text x="24" y="48" font-size="12" fill="#c3c2b7">Champion brain on 15 fixed trips it never trained on · mean of 3 seeds</text>
+<line x1="56" x2="610" y1="332" y2="332" stroke="#333331" stroke-width="1"/>
+<text x="48" y="336" font-size="11" text-anchor="end" fill="#c3c2b7">0%</text>
+<line x1="56" x2="610" y1="280.8" y2="280.8" stroke="#333331" stroke-width="1"/>
+<text x="48" y="284.8" font-size="11" text-anchor="end" fill="#c3c2b7">10%</text>
+<line x1="56" x2="610" y1="229.6" y2="229.6" stroke="#333331" stroke-width="1"/>
+<text x="48" y="233.6" font-size="11" text-anchor="end" fill="#c3c2b7">20%</text>
+<line x1="56" x2="610" y1="178.4" y2="178.4" stroke="#333331" stroke-width="1"/>
+<text x="48" y="182.4" font-size="11" text-anchor="end" fill="#c3c2b7">30%</text>
+<line x1="56" x2="610" y1="127.19999999999999" y2="127.19999999999999" stroke="#333331" stroke-width="1"/>
+<text x="48" y="131.2" font-size="11" text-anchor="end" fill="#c3c2b7">40%</text>
+<line x1="56" x2="610" y1="76" y2="76" stroke="#333331" stroke-width="1"/>
+<text x="48" y="80" font-size="11" text-anchor="end" fill="#c3c2b7">50%</text>
+<text x="56" y="350" font-size="11" text-anchor="middle" fill="#c3c2b7">0</text>
+<text x="240.66666666666666" y="350" font-size="11" text-anchor="middle" fill="#c3c2b7">50</text>
+<text x="425.3333333333333" y="350" font-size="11" text-anchor="middle" fill="#c3c2b7">100</text>
+<text x="610" y="350" font-size="11" text-anchor="middle" fill="#c3c2b7">150</text>
+<text x="333" y="370" font-size="12" text-anchor="middle" fill="#c3c2b7">generation</text>
+<path d="M92.9 138.8 L129.9 176.4 L166.8 172.8 L203.7 171.7 L240.7 135.4 L277.6 131.0 L314.5 252.3 L351.5 139.8 L388.4 220.4 L425.3 206.9 L462.3 169.7 L499.2 117.1 L536.1 246.3 L573.1 129.1 L610.0 185.2" fill="none" stroke="#3987e5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="610" cy="185.22666666666666" r="4" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<path d="M92.9 240.7 L129.9 234.2 L166.8 253.2 L203.7 251.6 L240.7 266.8 L277.6 308.3 L314.5 207.9 L351.5 179.4 L388.4 218.0 L425.3 227.7 L462.3 277.4 L499.2 302.6 L536.1 239.2 L573.1 254.7 L610.0 225.2" fill="none" stroke="#d95926" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="610" cy="225.16266666666667" r="4" fill="#d95926" stroke="#1a1a19" stroke-width="2"/>
+<path d="M92.9 315.8 L129.9 267.1 L166.8 240.0 L203.7 232.7 L240.7 180.1 L277.6 253.7 L314.5 286.6 L351.5 230.1 L388.4 300.1 L425.3 315.3 L462.3 230.8 L499.2 228.6 L536.1 290.4 L573.1 186.4 L610.0 234.2" fill="none" stroke="#199e70" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="610" cy="234.20800000000003" r="4" fill="#199e70" stroke="#1a1a19" stroke-width="2"/>
+<path d="M92.9 297.7 L129.9 273.5 L166.8 282.2 L203.7 294.3 L240.7 283.7 L277.6 308.3 L314.5 296.7 L351.5 264.9 L388.4 251.1 L425.3 293.8 L462.3 279.1 L499.2 284.4 L536.1 274.8 L573.1 281.5 L610.0 261.3" fill="none" stroke="#c98500" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="610" cy="261.344" r="4" fill="#c98500" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="624" cy="181.22666666666666" r="4" fill="#3987e5"/>
+<text x="632" y="185.22666666666666" font-size="11" fill="#ffffff">3 trips/gen 29%</text>
+<circle cx="624" cy="221.16266666666667" r="4" fill="#d95926"/>
+<text x="632" y="225.16266666666667" font-size="11" fill="#ffffff">1 trip/gen 21%</text>
+<circle cx="624" cy="236.16266666666667" r="4" fill="#199e70"/>
+<text x="632" y="240.16266666666667" font-size="11" fill="#ffffff">mutation only 19%</text>
+<circle cx="624" cy="257.344" r="4" fill="#c98500"/>
+<text x="632" y="261.344" font-size="11" fill="#ffffff">no GPS 14%</text>
+</svg>
