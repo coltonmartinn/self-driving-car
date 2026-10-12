@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Car Simulator</title>
+   <link rel="stylesheet" href="styles.css">
+</head>
+<body class="simulator">
+   <canvas id="carCanvas"></canvas>
+   <div id="sidebar">
+      <div id="simControls">
+         <button onclick="saveBrain()" title="Save the best car's brain">💾</button>
+         <button onclick="discardBrain()" title="Forget the saved brain (start learning from scratch)">🗑️</button>
+         <button onclick="nextGeneration()" title="Save best brain and start the next generation">⏭️</button>
+         <button onclick="restart()" title="Restart this generation">🔁</button>
+         <button id="manualBtn" onclick="toggleManual()" title="Drive yourself with arrow keys / WASD">🎮</button>
+         <button onclick="location.href = 'index.html'" title="Back to the world editor">✏️</button>
+      </div>
+      <div id="stats"></div>
+      <canvas id="networkCanvas"></canvas>
+      <canvas id="miniMapCanvas"></canvas>
+   </div>
+   <div id="message" style="display: none">
+      This world has no roads yet.<br>
+      <a href="index.html">Build one in the World Editor</a>, then press ▶️ Drive.
+   </div>
+
+   <script src="js/math/utils.js"></script>
+   <script src="js/math/graph.js"></script>
+   <script src="js/primitives/point.js"></script>
+   <script src="js/primitives/segment.js"></script>
+   <script src="js/primitives/polygon.js"></script>
+   <script src="js/primitives/envelope.js"></script>
+   <script src="js/items/building.js"></script>
+   <script src="js/items/tree.js"></script>
+   <script src="js/markings/marking.js"></script>
+   <script src="js/markings/stop.js"></script>
+   <script src="js/markings/yield.js"></script>
+   <script src="js/markings/crossing.js"></script>
+   <script src="js/markings/parking.js"></script>
+   <script src="js/markings/light.js"></script>
+   <script src="js/markings/start.js"></script>
+   <script src="js/markings/target.js"></script>
+   <script src="js/viewport.js"></script>
+   <script src="js/world.js"></script>
+   <script src="js/miniMap.js"></script>
+   <script src="js/car/controls.js"></script>
+   <script src="js/car/sensor.js"></script>
+   <script src="js/car/network.js"></script>
+   <script src="js/car/car.js"></script>
+   <script src="js/car/visualizer.js"></script>
+   <script>
+      const N = 100; // cars per generation
+      const MUTATION = 0.1; // how much each copy of the best brain is changed
+
+      carCanvas.width = window.innerWidth - 300;
+      carCanvas.height = window.innerHeight;
+      networkCanvas.width = 300;
+      networkCanvas.height = Math.max(
+         200,
+         window.innerHeight - 300 - simControls.offsetHeight - stats.offsetHeight - 20
+      );
+
+      const carCtx = carCanvas.getContext("2d");
+      const networkCtx = networkCanvas.getContext("2d");
+
+      let info = null;
+      try {
+         info = JSON.parse(localStorage.getItem("world"));
+      } catch (e) {}
+
+      const world = info ? World.load(info) : new World(new Graph());
+      if (world.graph.segments.length == 0) {
+         message.style.display = "block";
+      }
+
+      const viewport = new Viewport(carCanvas, 1.5);
+      const miniMap = new MiniMap(miniMapCanvas, world.graph, 300);
+      const roadBorders = world.roadBorders.map((s) => [s.p1, s.p2]);
+
+      // Spawn at the 🚙 start marking, or else in the middle of the first road
+      let startPoint = new Point(0, 0);
+      let startDir = new Point(0, -1);
+      const startMarking = world.markings.find((m) => m instanceof Start);
+      if (startMarking) {
+         startPoint = startMarking.center;
+         startDir = startMarking.directionVector;
+      } else if (world.graph.segments.length > 0) {
+         const seg = world.graph.segments[0];
+         startPoint = average(seg.p1, seg.p2);
+         startDir = seg.directionVector();
+      }
+      // cars use angle 0 = facing up, so convert from the direction vector
+      const startAngle = -angle(startDir) - Math.PI / 2;
+
+      let manual = false;
+      let cars = [];
+      let bestCar = null;
+
+      restart();
+      animate();
+
+      function generateCars(n, controlType) {
+         const result = [];
+         for (let i = 0; i < n; i++) {
+            result.push(new Car(startPoint.x, startPoint.y, 30, 50, controlType, startAngle, 4, "#2266dd"));
+         }
+         return result;
+      }
+
+      function restart() {
+         cars = manual ? generateCars(1, "KEYS") : generateCars(N, "AI");
+         const saved = getSaved("bestBrain");
+         if (!manual && saved) {
+            for (let i = 0; i < cars.length; i++) {
+               cars[i].brain = JSON.parse(saved);
+               if (i != 0) {
+                  NeuralNetwork.mutate(cars[i].brain, MUTATION);
+               }
+            }
+         }
+         bestCar = cars[0];
+         world.cars = cars;
+         world.bestCar = bestCar;
+      }
+
+      function getSaved(key) {
+         try {
+            return localStorage.getItem(key);
+         } catch (e) {
+            return null;
+         }
+      }
+
+      function setSaved(key, value) {
+         try {
+            if (value == null) {
+               localStorage.removeItem(key);
+            } else {
+               localStorage.setItem(key, value);
+            }
+         } catch (e) {}
+      }
+
+      function getGeneration() {
+         return Number(getSaved("generation")) || 1;
+      }
+
+      function saveBrain() {
+         if (manual) {
+            return;
+         }
+         setSaved("bestBrain", JSON.stringify(bestCar.brain));
+      }
+
+      function discardBrain() {
+         setSaved("bestBrain", null);
+         setSaved("generation", null);
+         restart();
+      }
+
+      function nextGeneration() {
+         if (manual) {
+            return;
+         }
+         saveBrain();
+         setSaved("generation", String(getGeneration() + 1));
+         restart();
+      }
+
+      function toggleManual() {
+         manual = !manual;
+         manualBtn.classList.toggle("active", manual);
+         restart();
+      }
+
+      function animate() {
+         for (const car of cars) {
+            car.update(roadBorders, []);
+         }
+         bestCar = cars.reduce((best, car) => (car.fitness > best.fitness ? car : best));
+         world.bestCar = bestCar;
+
+         // camera follows the best car
+         viewport.offset.x = -bestCar.x;
+         viewport.offset.y = -bestCar.y;
+
+         viewport.reset();
+         const viewPoint = scale(viewport.getOffset(), -1);
+         world.draw(carCtx, viewPoint, false, viewport.getRenderRadius());
+         miniMap.update(viewPoint, cars);
+
+         networkCtx.clearRect(0, 0, networkCanvas.width, networkCanvas.height);
+         Visualizer.drawNetwork(networkCtx, bestCar.brain);
+
+         const alive = cars.filter((c) => !c.damaged).length;
+         stats.innerHTML = manual
+            ? "Manual driving: arrow keys / WASD"
+            : "Generation " + getGeneration() +
+              " · alive " + alive + "/" + cars.length +
+              " · best " + Math.round(bestCar.fitness) +
+              (alive == 0 ? "<br>All crashed. Press ⏭️ to evolve." : "");
+
+         requestAnimationFrame(animate);
+      }
+   </script>
+</body>
+</html>

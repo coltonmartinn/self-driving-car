@@ -1,0 +1,153 @@
+body {
+   background-color: #222;
+   color: #ddd;
+   font-family: sans-serif;
+   text-align: center;
+   margin: 0;
+}
+
+h1 {
+   font-weight: normal;
+   margin: 12px 0;
+}
+
+a {
+   color: #7bf;
+}
+
+#myCanvas {
+   background-color: #2a5;
+   cursor: crosshair;
+}
+
+#controls {
+   margin-top: 8px;
+   display: flex;
+   flex-wrap: wrap;
+   justify-content: center;
+   gap: 14px;
+}
+
+.group {
+   display: inline-flex;
+   gap: 4px;
+}
+
+button,
+.file-input-label {
+   background: #2c2c2c;
+   color: #ddd;
+   border: 1px solid #555;
+   border-radius: 5px;
+   padding: 4px 8px;
+   font-size: 20px;
+   cursor: pointer;
+}
+
+button:hover,
+.file-input-label:hover {
+   background-color: #3a3a3a;
+}
+
+button.active {
+   background-color: #ddd;
+   border-color: white;
+}
+
+.file-input-label input {
+   display: none;
+}
+
+.help {
+   font-size: 13px;
+   color: #999;
+   padding: 0 16px;
+}
+
+.panel {
+   position: fixed;
+   top: 50%;
+   left: 50%;
+   transform: translate(-50%, -50%);
+   width: min(560px, calc(100vw - 32px));
+   background: #2c2c2c;
+   border: 1px solid #555;
+   border-radius: 8px;
+   padding: 12px 16px;
+   text-align: left;
+   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+.panel pre {
+   background: #1a1a1a;
+   padding: 8px;
+   font-size: 11px;
+   white-space: pre-wrap;
+   word-break: break-all;
+   user-select: all;
+}
+
+.panel textarea {
+   width: 100%;
+   height: 120px;
+   box-sizing: border-box;
+   background: #1a1a1a;
+   color: #ddd;
+   border: 1px solid #555;
+}
+
+.panel div {
+   text-align: center;
+   margin-top: 8px;
+}
+
+/* ---------- simulator ---------- */
+
+body.simulator {
+   overflow: hidden;
+   display: flex;
+}
+
+#carCanvas {
+   background-color: #2a5;
+}
+
+#sidebar {
+   width: 300px;
+   display: flex;
+   flex-direction: column;
+   background: #111;
+}
+
+#networkCanvas {
+   background-color: black;
+}
+
+#miniMapCanvas {
+   background-color: #2a5;
+   opacity: 0.85;
+}
+
+#stats {
+   padding: 6px;
+   font-size: 13px;
+   color: #bbb;
+}
+
+#simControls {
+   display: flex;
+   flex-wrap: wrap;
+   justify-content: center;
+   gap: 4px;
+   padding: 6px;
+}
+
+#message {
+   position: fixed;
+   top: 40%;
+   left: calc(50% - 150px);
+   transform: translate(-50%, -50%);
+   background: rgba(0, 0, 0, 0.8);
+   padding: 16px 24px;
+   border-radius: 8px;
+}

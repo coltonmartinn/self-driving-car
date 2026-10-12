@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>World Editor</title>
+   <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+   <h1>World Editor</h1>
+   <canvas id="myCanvas"></canvas>
+
+   <div id="controls">
+      <span class="group">
+         <button onclick="dispose()" title="Clear everything">🗑️</button>
+         <button onclick="save()" title="Save (the simulator uses this)">💾</button>
+         <button onclick="download()" title="Download as a .world file">⬇️</button>
+         <label for="fileInput" class="file-input-label" title="Load a .world file">📂
+            <input type="file" id="fileInput" accept=".world,.json" onchange="load(event)">
+         </label>
+         <button onclick="openOsmPanel()" title="Import real roads from OpenStreetMap">🗺️</button>
+         <button onclick="generateRandomWorld()" title="Generate a random world">🎲</button>
+      </span>
+      <span class="group">
+         <button id="graphBtn" onclick="setMode('graph')" title="Roads">🌐</button>
+         <button id="stopBtn" onclick="setMode('stop')" title="Stop sign">🛑</button>
+         <button id="yieldBtn" onclick="setMode('yield')" title="Yield sign">⚠️</button>
+         <button id="crossingBtn" onclick="setMode('crossing')" title="Pedestrian crossing">🚶</button>
+         <button id="parkingBtn" onclick="setMode('parking')" title="Parking spot">🅿️</button>
+         <button id="lightBtn" onclick="setMode('light')" title="Traffic light">🚦</button>
+         <button id="startBtn" onclick="setMode('start')" title="Car start position">🚙</button>
+         <button id="targetBtn" onclick="setMode('target')" title="Target">🎯</button>
+      </span>
+      <span class="group">
+         <button onclick="goToSimulator()" title="Save and open the car simulator">▶️ Drive</button>
+      </span>
+   </div>
+   <p class="help" id="help"></p>
+
+   <div id="osmPanel" class="panel" style="display: none">
+      <p>
+         1. Open <a href="https://overpass-turbo.eu/" target="_blank">overpass-turbo.eu</a>,
+         zoom to a small neighbourhood and run this query:
+      </p>
+      <pre id="osmQuery">[out:json];
+(
+  way['highway']
+  ['highway' !~ 'pedestrian|footway|cycleway|path|service|corridor|track|steps|raceway|bridleway|proposed|construction|elevator|bus_guideway|sidewalk|crossing']
+  ({{bbox}});
+);
+out body;
+>;
+out skel;</pre>
+      <p>2. Click "Data" (top right), copy all of it and paste it here:</p>
+      <textarea id="osmDataContainer" placeholder="Paste OSM data here"></textarea>
+      <div>
+         <button onclick="parseOsmData()" title="Import">✔️</button>
+         <button onclick="closeOsmPanel()" title="Cancel">❌</button>
+      </div>
+   </div>
+
+   <script src="js/math/utils.js"></script>
+   <script src="js/math/graph.js"></script>
+   <script src="js/math/osm.js"></script>
+   <script src="js/math/worldGenerator.js"></script>
+   <script src="js/primitives/point.js"></script>
+   <script src="js/primitives/segment.js"></script>
+   <script src="js/primitives/polygon.js"></script>
+   <script src="js/primitives/envelope.js"></script>
+   <script src="js/items/building.js"></script>
+   <script src="js/items/tree.js"></script>
+   <script src="js/markings/marking.js"></script>
+   <script src="js/markings/stop.js"></script>
+   <script src="js/markings/yield.js"></script>
+   <script src="js/markings/crossing.js"></script>
+   <script src="js/markings/parking.js"></script>
+   <script src="js/markings/light.js"></script>
+   <script src="js/markings/start.js"></script>
+   <script src="js/markings/target.js"></script>
+   <script src="js/editors/graphEditor.js"></script>
+   <script src="js/editors/markingEditor.js"></script>
+   <script src="js/editors/stopEditor.js"></script>
+   <script src="js/editors/yieldEditor.js"></script>
+   <script src="js/editors/crossingEditor.js"></script>
+   <script src="js/editors/parkingEditor.js"></script>
+   <script src="js/editors/lightEditor.js"></script>
+   <script src="js/editors/startEditor.js"></script>
+   <script src="js/editors/targetEditor.js"></script>
+   <script src="js/viewport.js"></script>
+   <script src="js/world.js"></script>
+   <script>
+      myCanvas.width = 600;
+      myCanvas.height = 600;
+
+      const ctx = myCanvas.getContext("2d");
+
+      let saved = null;
+      try {
+         saved = JSON.parse(localStorage.getItem("world"));
+      } catch (e) {}
+
+      const world = saved ? World.load(saved) : new World(new Graph());
+      const graph = world.graph;
+      const viewport = new Viewport(myCanvas, world.zoom, world.offset);
+
+      const markingHelp =
+         "Hover near a dashed yellow line and click to place · Shift: flip direction · Right-click: remove";
+      const tools = {
+         graph: {
+            button: graphBtn,
+            editor: new GraphEditor(viewport, graph),
+            help: "Left-click: add / select point · Drag: move point · Right-click: deselect / delete point",
+         },
+         stop: { button: stopBtn, editor: new StopEditor(viewport, world), help: markingHelp },
+         yield: { button: yieldBtn, editor: new YieldEditor(viewport, world), help: markingHelp },
+         crossing: { button: crossingBtn, editor: new CrossingEditor(viewport, world), help: markingHelp },
+         parking: { button: parkingBtn, editor: new ParkingEditor(viewport, world), help: markingHelp },
+         light: { button: lightBtn, editor: new LightEditor(viewport, world), help: markingHelp },
+         start: { button: startBtn, editor: new StartEditor(viewport, world), help: markingHelp },
+         target: { button: targetBtn, editor: new TargetEditor(viewport, world), help: markingHelp },
+      };
+      let activeTool = null;
+
+      let oldGraphHash = graph.hash();
+
+      setMode("graph");
+      animate();
+
+      function animate() {
+         viewport.reset();
+         if (graph.hash() != oldGraphHash) {
+            world.generate();
+            oldGraphHash = graph.hash();
+         }
+         const viewPoint = scale(viewport.getOffset(), -1);
+         world.draw(ctx, viewPoint, true, viewport.getRenderRadius());
+         ctx.globalAlpha = 0.3;
+         activeTool.editor.display();
+         ctx.globalAlpha = 1;
+         requestAnimationFrame(animate);
+      }
+
+      function setMode(mode) {
+         for (const tool of Object.values(tools)) {
+            tool.button.classList.remove("active");
+            tool.editor.disable();
+         }
+         activeTool = tools[mode];
+         activeTool.button.classList.add("active");
+         activeTool.editor.enable();
+         help.textContent =
+            activeTool.help + " · Middle-drag or Alt+drag: pan · Wheel: zoom";
+      }
+
+      function dispose() {
+         tools.graph.editor.dispose();
+         world.markings.length = 0;
+      }
+
+      function save() {
+         world.zoom = viewport.zoom;
+         world.offset = viewport.offset;
+         try {
+            localStorage.setItem("world", JSON.stringify(world));
+            return true;
+         } catch (e) {
+            alert(
+               "Could not save to the browser (the map may be too big): " +
+                  e.message + "\nUse ⬇️ to download it as a file instead."
+            );
+            return false;
+         }
+      }
+
+      function download() {
+         world.zoom = viewport.zoom;
+         world.offset = viewport.offset;
+         const element = document.createElement("a");
+         element.setAttribute(
+            "href",
+            "data:application/json;charset=utf-8," +
+               encodeURIComponent(JSON.stringify(world))
+         );
+         element.setAttribute("download", "name.world");
+         element.click();
+      }
+
+      function load(event) {
+         const file = event.target.files[0];
+         if (!file) {
+            return;
+         }
+         const reader = new FileReader();
+         reader.onload = (evt) => {
+            try {
+               const info = JSON.parse(evt.target.result);
+               localStorage.setItem("world", JSON.stringify(info));
+               location.reload();
+            } catch (e) {
+               alert("Could not load that file: " + e.message);
+            }
+         };
+         reader.readAsText(file);
+      }
+
+      function goToSimulator() {
+         if (save()) {
+            location.href = "simulator.html";
+         }
+      }
+
+      function generateRandomWorld() {
+         if (
+            graph.segments.length > 0 &&
+            !confirm("Replace the current world with a random one?")
+         ) {
+            return;
+         }
+         const result = WorldGenerator.generateGraph();
+         tools.graph.editor.dispose();
+         world.markings.length = 0;
+         graph.points = result.points;
+         graph.segments = result.segments;
+         world.generate();
+         oldGraphHash = graph.hash();
+         world.markings.push(...WorldGenerator.generateMarkings(world));
+
+         // fit the whole map in view
+         const xs = graph.points.map((p) => p.x);
+         const ys = graph.points.map((p) => p.y);
+         const minX = Math.min(...xs), maxX = Math.max(...xs);
+         const minY = Math.min(...ys), maxY = Math.max(...ys);
+         viewport.offset = new Point(-(minX + maxX) / 2, -(minY + maxY) / 2);
+         const extent = Math.max(maxX - minX, maxY - minY) + world.roadWidth * 4;
+         viewport.zoom = Math.max(1, Math.min(5, extent / myCanvas.width));
+
+         setMode("graph");
+      }
+
+      function openOsmPanel() {
+         osmPanel.style.display = "block";
+      }
+
+      function closeOsmPanel() {
+         osmPanel.style.display = "none";
+      }
+
+      function parseOsmData() {
+         if (osmDataContainer.value == "") {
+            alert("Paste data first");
+            return;
+         }
+         let result;
+         try {
+            result = Osm.parseRoads(JSON.parse(osmDataContainer.value));
+         } catch (e) {
+            alert("That doesn't look like Overpass JSON: " + e.message);
+            return;
+         }
+         tools.graph.editor.dispose();
+         world.markings.length = 0;
+         graph.points = result.points;
+         graph.segments = result.segments;
+         viewport.zoom = 5;
+         viewport.offset = new Point(0, 0);
+         closeOsmPanel();
+      }
+   </script>
+</body>
+</html>
