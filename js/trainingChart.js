@@ -102,7 +102,8 @@ class TrainingChart {
       ctx.textAlign = "left";
       ctx.fillStyle = C.textPrimary;
       ctx.font = "600 12px sans-serif";
-      ctx.fillText("Training progress", 10, 18);
+      // short title on narrow cards (phones) so it doesn't run into the legend
+      ctx.fillText(this.width < 260 ? "Progress" : "Training progress", 10, 18);
       this.#legendItem(this.width - 118, 14, C.best, "best");
       this.#legendItem(this.width - 70, 14, C.average, "average");
 

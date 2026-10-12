@@ -24,10 +24,12 @@ importScripts(
    "places.js"
 );
 
+// Two jobs: { data, place } builds a world from raw map data;
+// { info } loads a saved world (e.g. a bundled city) and rebuilds its roads.
 onmessage = (evt) => {
-   const { data, place } = evt.data;
+   const { data, place, info } = evt.data;
    try {
-      const world = Places.buildWorld(data, place);
+      const world = info ? World.load(info) : Places.buildWorld(data, place);
       // include the finished road shapes so the page doesn't redo that work
       postMessage({ ok: true, info: JSON.parse(JSON.stringify(world.toFullJSON())) });
    } catch (e) {

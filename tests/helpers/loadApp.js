@@ -33,19 +33,34 @@ const FILES = [
    "js/car/network.js",
    "js/car/car.js",
    "js/car/trafficCar.js",
+   "js/car/genetics.js",
+   "js/simulation.js",
+   "js/places.js",
 ];
 
 const EXPORTS = [
    "Point", "Segment", "Polygon", "Envelope", "Graph", "SpatialGrid", "Osm",
    "WorldGenerator", "World", "Building", "Tree", "Marking", "Stop", "Yield",
    "Crossing", "Parking", "Light", "Start", "Target", "Car", "Sensor",
-   "NeuralNetwork", "Level", "TrafficCar", "TrafficNetwork", "Pathfinder", "Route", "MinHeap",
+   "NeuralNetwork", "Level", "TrafficCar", "TrafficNetwork", "Pathfinder", "Route", "MinHeap", "Genetics", "Simulation", "Places",
    "getIntersection", "distance", "average", "add", "subtract", "scale",
    "normalize", "angle", "lerp", "polysIntersect", "getNearestPoint",
 ];
 
-function loadApp() {
+// seed: makes Math.random (inside the app only) repeatable, for experiments
+function loadApp({ seed = null } = {}) {
    const context = vm.createContext({ console });
+   if (seed != null) {
+      // mulberry32: a small, fast, well-distributed seeded generator
+      vm.runInContext(
+         "(() => { let a = " + (seed >>> 0) + "; Math.random = () => {" +
+            "a |= 0; a = (a + 0x6D2B79F5) | 0;" +
+            "let t = Math.imul(a ^ (a >>> 15), 1 | a);" +
+            "t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;" +
+            "return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })()",
+         context
+      );
+   }
    for (const file of FILES) {
       const code = fs.readFileSync(path.join(ROOT, file), "utf8");
       vm.runInContext(code, context, { filename: file });

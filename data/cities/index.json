@@ -1,0 +1,37 @@
+[
+  {
+    "slug": "times-square",
+    "label": "Times Square",
+    "emoji": "🗽",
+    "name": "Times Square, Manhattan Community Board 5, Manhattan, New York County, New York, 10036, United States",
+    "file": "times-square.json"
+  },
+  {
+    "slug": "paris",
+    "label": "Paris",
+    "emoji": "🥐",
+    "name": "Musée du Louvre, Place du Carrousel, Saint-Germain-l'Auxerrois, Paris 1er Arrondissement, Paris, Île-de-France, France métropolitaine, 75001, France",
+    "file": "paris.json"
+  },
+  {
+    "slug": "beverly-hills",
+    "label": "Beverly Hills",
+    "emoji": "🌴",
+    "name": "90210, Los Angeles, Los Angeles County, California, United States",
+    "file": "beverly-hills.json"
+  },
+  {
+    "slug": "shibuya",
+    "label": "Shibuya",
+    "emoji": "🗼",
+    "name": "渋谷駅前交差点, 旧大山街道, 道玄坂二丁目, 道玄坂, 渋谷区, 東京都, 150-0043, 日本",
+    "file": "shibuya.json"
+  },
+  {
+    "slug": "san-francisco",
+    "label": "San Francisco",
+    "emoji": "🌉",
+    "name": "Union Square, Tenderloin, San Francisco, California, United States",
+    "file": "san-francisco.json"
+  }
+]

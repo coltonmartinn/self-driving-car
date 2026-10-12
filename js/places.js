@@ -2,9 +2,24 @@
 //  - Nominatim (or Photon as a backup) to turn "city / zip / address" into lat, lon
 //  - Overpass to download the roads, buildings and signs around that point
 // When the page is served by server.js, requests go through it (it can send a
-// proper User-Agent and caches downloads); otherwise we call the services directly.
+// proper User-Agent and caches downloads); otherwise (e.g. the GitHub Pages
+// demo) we call the services directly.
 const Places = {
-   viaServer: typeof location != "undefined" && location.protocol.startsWith("http"),
+   // workers need http(s); browsers block them on file:// pages
+   canUseWorker: typeof location != "undefined" && location.protocol.startsWith("http"),
+   serverCheck: null,
+
+   // Is server.js behind this page? (asked once)
+   hasServer() {
+      if (!Places.serverCheck) {
+         Places.serverCheck = Places.canUseWorker
+            ? Places.fetchWithTimeout("api/health", {}, 3000)
+                 .then((res) => res.ok)
+                 .catch(() => false)
+            : Promise.resolve(false);
+      }
+      return Places.serverCheck;
+   },
 
    OVERPASS_SERVERS: [
       "https://overpass-api.de/api/interpreter",
@@ -20,7 +35,7 @@ const Places = {
    },
 
    async search(query) {
-      if (Places.viaServer) {
+      if (await Places.hasServer()) {
          try {
             const res = await Places.fetchWithTimeout("api/search?q=" + encodeURIComponent(query), {}, 20000);
             if (res.ok) {
@@ -80,7 +95,7 @@ const Places = {
 
    async fetchMapData(lat, lon, radius, onStatus = () => {}) {
       const body = "data=" + encodeURIComponent(Places.buildQuery(lat, lon, radius));
-      if (Places.viaServer) {
+      if (await Places.hasServer()) {
          // the server tries every map server in turn, so allow plenty of time
          const res = await Places.fetchWithTimeout(
             "api/overpass",
@@ -163,7 +178,19 @@ const Places = {
    // Runs buildWorld in a Web Worker so the page stays smooth. Browsers don't
    // allow workers on file:// pages, so then it falls back to the main thread.
    async buildWorldInBackground(data, place) {
-      if (typeof Worker != "undefined" && Places.viaServer) {
+      return Places.inBackground({ data, place }, () => Places.buildWorld(data, place));
+   },
+
+   // Loads one of the ready-made cities in data/cities (no map servers needed)
+   async loadBundledCity(file) {
+      const res = await Places.fetchWithTimeout("data/cities/" + file, {}, 30000);
+      if (!res.ok) throw new Error("Couldn't load " + file + " (" + res.status + ")");
+      const info = await res.json();
+      return Places.inBackground({ info }, () => World.load(info));
+   },
+
+   async inBackground(message, fallback) {
+      if (typeof Worker != "undefined" && Places.canUseWorker) {
          try {
             const info = await new Promise((resolve, reject) => {
                const worker = new Worker("js/worldWorker.js");
@@ -176,7 +203,7 @@ const Places = {
                   worker.terminate();
                   reject(new Error(evt.message || "worker failed"));
                };
-               worker.postMessage({ data, place });
+               worker.postMessage(message);
             });
             Places.lastBuildUsedWorker = true;
             return World.load(info);
@@ -188,7 +215,7 @@ const Places = {
       Places.lastBuildUsedWorker = false;
       // let the browser paint the loading message before the heavy work
       await new Promise((resolve) => setTimeout(resolve, 50));
-      return Places.buildWorld(data, place);
+      return fallback();
    },
 
    shortName(name) {

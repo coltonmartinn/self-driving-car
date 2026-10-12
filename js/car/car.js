@@ -19,9 +19,10 @@ class Car {
       // DUMMY and AUTO (traffic) cars don't need sensors or a brain
       if (controlType == "AI" || controlType == "KEYS") {
          this.sensor = new Sensor(this);
-         // inputs: the sensor rays + 2 GPS signals ("route goes left/right")
+         // inputs: the sensor rays, the car's speed, and 2 GPS signals
+         // ("the route bends left / right"); outputs: gas, left, right, brake
          this.gpsInputs = [0, 0];
-         this.brain = new NeuralNetwork([this.sensor.rayCount + this.gpsInputs.length, 6, 4]);
+         this.brain = new NeuralNetwork([this.sensor.rayCount + 1 + this.gpsInputs.length, 8, 4]);
       }
       this.controls = new Controls(controlType);
       this.polygon = this.#createPolygon();
@@ -47,7 +48,8 @@ class Car {
          this.sensor.update(nearby, traffic);
          // closer obstacle = stronger signal (0 means nothing seen)
          const offsets = this.sensor.readings.map((s) => (s == null ? 0 : 1 - s.offset));
-         const outputs = NeuralNetwork.feedForward([...offsets, ...this.gpsInputs], this.brain);
+         const speed = this.speed / this.maxSpeed;
+         const outputs = NeuralNetwork.feedForward([...offsets, speed, ...this.gpsInputs], this.brain);
 
          if (this.useBrain) {
             this.controls.forward = outputs[0];

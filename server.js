@@ -130,6 +130,9 @@ http
          if (url.pathname == "/api/overpass" && req.method == "POST") {
             return await handleOverpass(req, res);
          }
+         if (url.pathname == "/api/health") {
+            return send(res, 200, JSON.stringify({ ok: true }));
+         }
          if (url.pathname == "/api/search") {
             return await handleSearch(req, res, url.searchParams.get("q") || "");
          }

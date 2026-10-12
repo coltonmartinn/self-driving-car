@@ -52,7 +52,9 @@ class Visualizer {
          }
       }
 
-      const nodeRadius = 18;
+      // shrink the circles when there are many inputs side by side
+      const spacing = width / Math.max(1, Math.max(inputs.length, outputs.length) - 1);
+      const nodeRadius = Math.min(18, spacing * 0.42);
       for (let i = 0; i < inputs.length; i++) {
          const x = Visualizer.#getNodeX(inputs, i, left, right);
          ctx.beginPath();

@@ -413,6 +413,16 @@ body.app {
    }
 }
 
+#citySelect {
+   background: #262626;
+   color: #eee;
+   border: 1px solid #444;
+   border-radius: 999px;
+   padding: 8px 12px;
+   font-family: inherit;
+   font-size: 14px;
+}
+
 #sidebar {
    width: 300px;
    flex: none;
@@ -453,4 +463,69 @@ body.app {
    justify-content: center;
    font-size: 13px;
    padding: 6px 8px;
+}
+
+/* ---------- phones ---------- */
+
+@media (max-width: 760px) {
+   body.app {
+      height: auto;
+      min-height: 100vh;
+      overflow: auto;
+   }
+
+   #topbar {
+      padding: 8px 12px;
+   }
+
+   .search-form {
+      flex-basis: 100%;
+      flex-wrap: wrap;
+   }
+
+   .search-form input {
+      flex-basis: 100%;
+   }
+
+   .side-link {
+      margin-left: 0;
+   }
+
+   #main {
+      flex-direction: column;
+   }
+
+   #stage {
+      flex: none;
+      height: 62vh;
+   }
+
+   #sidebar {
+      width: 100%;
+   }
+
+   #simControls {
+      grid-template-columns: 1fr 1fr 1fr;
+   }
+
+   #simControls button {
+      padding: 6px 4px;
+      font-size: 12px;
+   }
+
+   #networkCanvas,
+   #miniMapCanvas {
+      display: none;
+   }
+
+   #chartCard {
+      width: 220px;
+      height: 120px;
+      left: 8px;
+      bottom: 8px;
+   }
+
+   #hint {
+      white-space: normal;
+   }
 }

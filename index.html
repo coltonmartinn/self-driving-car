@@ -19,6 +19,9 @@
          <button class="primary" type="submit"><span class="icon">🔍</span>Go</button>
          <div id="searchResults" class="search-results"></div>
       </form>
+      <select id="citySelect" title="Ready-made cities that load instantly" style="display: none">
+         <option value="">🌆 Featured cities</option>
+      </select>
       <a class="side-link" href="editor.html" title="Design your own city from scratch">🏗️ Build your own city</a>
    </header>
 
@@ -39,13 +42,13 @@
                   Search any real place above. Your cars learn to drive there by trial and
                   error, among traffic that already knows the rules of the road.
                </p>
+               <p class="muted" id="instantLabel" style="display: none">Load instantly:</p>
+               <div class="chips" id="cityChips"></div>
+               <p class="muted">or try a search:</p>
                <div class="chips">
-                  <button class="chip" data-q="Times Square, New York">🗽 Times Square</button>
-                  <button class="chip" data-q="Paris, France">🥐 Paris</button>
-                  <button class="chip" data-q="90210">🌴 90210</button>
-                  <button class="chip" data-q="Shibuya, Tokyo">🗼 Shibuya</button>
                   <button class="chip" data-q="Austin, Texas">🎸 Austin</button>
                   <button class="chip" data-q="Amsterdam">🚲 Amsterdam</button>
+                  <button class="chip" data-q="Chicago Loop">🌭 Chicago</button>
                </div>
                <p class="muted">or <a href="editor.html">build your own city</a></p>
             </div>
@@ -67,9 +70,12 @@
             <button id="autoBtn" onclick="toggleAuto()" title="Automatically evolve when every car has crashed or got stuck"><span class="icon">♾️</span>Auto-evolve</button>
             <button id="trafficBtn" onclick="toggleTraffic()" title="Turn traffic on or off"><span class="icon">🚙</span>Traffic</button>
             <button id="manualBtn" onclick="toggleManual()" title="Drive yourself with arrow keys / WASD"><span class="icon">🕹️</span>Drive myself</button>
-            <button onclick="discardBrain()" title="Forget everything learned and start from scratch"><span class="icon">🧹</span>Forget brain</button>
             <button id="tripBtn" onclick="toggleTripPicking()" title="Click on the map to choose where the cars should drive"><span class="icon">🏁</span>Destination</button>
             <button onclick="randomTrip()" title="Pick a random destination a few blocks away"><span class="icon">🎲</span>Random trip</button>
+            <button onclick="shareLink()" title="Copy a link to this place and trip"><span class="icon">🔗</span>Share link</button>
+            <button onclick="downloadBrain()" title="Download the current best brain as a file"><span class="icon">💾</span>Save brain</button>
+            <button onclick="usePretrained()" title="Load the brain that was trained ahead of time on real cities"><span class="icon">🎓</span>Pre-trained</button>
+            <button onclick="discardBrain()" title="Forget everything learned and watch the cars learn from scratch"><span class="icon">🧹</span>From scratch</button>
          </div>
          <div id="stats"></div>
          <canvas id="networkCanvas"></canvas>
@@ -109,13 +115,11 @@
    <script src="js/car/car.js"></script>
    <script src="js/car/trafficCar.js"></script>
    <script src="js/car/visualizer.js"></script>
+   <script src="js/car/genetics.js"></script>
+   <script src="js/simulation.js"></script>
    <script>
-      const N = 100; // learning cars per generation
-      const MUTATION = 0.1; // how much each copy of the best brain is changed
-      const TRAFFIC_COUNT = 30;
-      const STUCK_FRAMES = 300; // no progress for 5 s = out of this generation
-      const GENERATION_FRAMES = 60 * 90; // a generation lasts at most 90 s
-      const INPUT_LABELS = ["◀", "↖", "▲", "↗", "▶", "GPS◀", "GPS▶"];
+      const INPUT_LABELS = ["◀", "↖", "▲", "↗", "▶", "speed", "GPS◀", "GPS▶"];
+      const MAX_SAVED_BRAINS = 10; // the top brains are kept, for crossover
 
       const carCtx = carCanvas.getContext("2d");
       const networkCtx = networkCanvas.getContext("2d");
@@ -125,20 +129,11 @@
       const chart = new TrainingChart(chartCanvas, chartTable);
 
       let world = null;
-      let borderGrid = null;
-      let network = null;
-      let adjacency = null; // road network for route finding
-      let start = null;
-      let trip = null; // { route } when the cars have a destination
+      let sim = null;
       let pickingDestination = false;
-
-      let cars = [];
-      let traffic = [];
-      let bestCar = null;
-      let frame = 0;
       let evolveCountdown = -1;
+      let pretrainedBrain = null;
 
-      let manual = false;
       let autoEvolve = getSaved("autoEvolve") != "off";
       let trafficOn = getSaved("trafficOn") != "off";
       autoBtn.classList.toggle("active", autoEvolve);
@@ -161,11 +156,15 @@
          });
       }
 
+      let featuredCities = [];
+      const params = new URLSearchParams(location.search);
+      const sharedPlace = params.has("city") || params.has("lat");
+
       let info = null;
       try {
          info = JSON.parse(localStorage.getItem("world"));
       } catch (e) {}
-      if (info && info.graph && info.graph.segments.length > 0) {
+      if (!sharedPlace && info && info.graph && info.graph.segments.length > 0) {
          const saved = World.load(info);
          setWorld(saved);
          if (saved.roadWidthChanged && saved.source == "osm" && saved.place) {
@@ -174,9 +173,118 @@
          }
       } else {
          setWorld(new World(new Graph()));
-         welcome.style.display = "flex";
+         if (!sharedPlace) welcome.style.display = "flex";
       }
+      loadPretrainedBrain();
+      loadFeaturedCities().then(openSharedLink);
       animate();
+
+      // ---------- featured cities & share links ----------
+
+      async function loadFeaturedCities() {
+         try {
+            featuredCities = await (await fetch("data/cities/index.json")).json();
+         } catch (e) {
+            return; // e.g. opened as a file: searching still works
+         }
+         for (const city of featuredCities) {
+            const chip = document.createElement("button");
+            chip.className = "chip";
+            chip.textContent = city.emoji + " " + city.label;
+            chip.addEventListener("click", () => loadCity(city.slug));
+            cityChips.append(chip);
+
+            const option = document.createElement("option");
+            option.value = city.slug;
+            option.textContent = city.emoji + " " + city.label;
+            citySelect.append(option);
+         }
+         instantLabel.style.display = "block";
+         citySelect.style.display = "";
+      }
+
+      citySelect.addEventListener("change", () => {
+         if (citySelect.value) loadCity(citySelect.value);
+         citySelect.value = "";
+      });
+
+      async function loadCity(slug) {
+         const city = featuredCities.find((c) => c.slug == slug);
+         if (!city) return false;
+         welcome.style.display = "none";
+         showLoading("Loading " + city.label + "…");
+         try {
+            const newWorld = await Places.loadBundledCity(city.file);
+            newWorld.place = { ...newWorld.place, slug };
+            try {
+               localStorage.setItem("world", JSON.stringify(newWorld));
+            } catch (e) {}
+            setWorld(newWorld);
+            hideLoading();
+            return true;
+         } catch (e) {
+            showLoading("😕 " + e.message, true);
+            return false;
+         }
+      }
+
+      // ?city=paris or ?lat=..&lon=..&r=..&name=.., plus &to=x,y for a trip
+      async function openSharedLink() {
+         if (!sharedPlace) return;
+         if (params.has("city")) {
+            if (!(await loadCity(params.get("city")))) return;
+         } else {
+            const place = {
+               name: params.get("name") || "Shared place",
+               lat: Number(params.get("lat")),
+               lon: Number(params.get("lon")),
+               radius: Number(params.get("r")) || Places.SIZES.medium,
+            };
+            await loadPlace(place);
+         }
+         if (params.has("to")) {
+            const [x, y] = params.get("to").split(",").map(Number);
+            const dest = getNearestPoint(new Point(x, y), world.graph.points, 100);
+            if (dest) setTrip(dest);
+         }
+      }
+
+      function shareLink() {
+         const link = new URLSearchParams();
+         const place = world.place;
+         if (place && place.slug) {
+            link.set("city", place.slug);
+         } else if (place) {
+            link.set("lat", place.lat.toFixed(6));
+            link.set("lon", place.lon.toFixed(6));
+            link.set("r", place.radius);
+            link.set("name", Places.shortName(place.name));
+         } else {
+            showHint("Only real places can be shared (your own cities live in this browser)", 3500);
+            return;
+         }
+         if (sim.trip) {
+            const end = sim.trip.route.points[sim.trip.route.points.length - 1];
+            link.set("to", end.x.toFixed(1) + "," + end.y.toFixed(1));
+         }
+         const url = location.origin + location.pathname + "?" + link;
+         history.replaceState(null, "", "?" + link);
+         if (navigator.clipboard) {
+            navigator.clipboard.writeText(url).then(
+               () => showHint("🔗 Link copied!", 2000),
+               () => prompt("Copy this link:", url)
+            );
+         } else {
+            prompt("Copy this link:", url);
+         }
+      }
+
+      function downloadBrain() {
+         const a = document.createElement("a");
+         a.href = "data:application/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sim.bestCar.brain));
+         a.download = "brain.json";
+         a.click();
+      }
 
       // ---------- loading real places ----------
 
@@ -216,170 +324,118 @@
       function setWorld(newWorld) {
          world = newWorld;
          miniMap.graph = world.graph;
-         network = new TrafficNetwork(world);
-
-         // index the road edges so each car only checks the ones near it
-         borderGrid = new SpatialGrid(250);
-         for (const seg of world.roadBorders) {
-            borderGrid.insert([seg.p1, seg.p2], SpatialGrid.boundsOfSegment(seg.p1, seg.p2));
-         }
-
-         adjacency = Pathfinder.buildAdjacency(world.graph);
-         chart.reset("m");
-         trip = null;
          world.route = null;
          world.destination = null;
+         sim = new Simulation(world, { trafficOn });
+         chart.reset(sim.scoreUnit);
          setPicking(false);
-         start = findStart(world);
          placeLabel.textContent = world.place
             ? "📍 " + Places.shortName(world.place.name)
             : world.graph.segments.length > 0 ? "🏗️ Your city" : "";
          restart();
       }
 
-      // The 📍 start marking if there is one, otherwise a decent road near the middle
-      function findStart(w) {
-         const marking = w.markings.find((m) => m instanceof Start);
-         if (marking) {
-            const dir = marking.directionVector;
-            return { point: marking.center, angle: -angle(dir) - Math.PI / 2 };
-         }
-         if (w.graph.segments.length == 0) {
-            return { point: new Point(0, 0), angle: 0 };
-         }
-         const center = w.source == "osm"
-            ? new Point(0, 0)
-            : scale(w.graph.points.reduce((c, p) => add(c, p), new Point(0, 0)), 1 / w.graph.points.length);
-         const roads = w.graph.segments.filter((s) => s.length() > w.roadWidth * 2.5);
-         const pool = roads.length > 0 ? roads : w.graph.segments;
-         let best = pool[0];
-         for (const s of pool) {
-            if (distance(average(s.p1, s.p2), center) < distance(average(best.p1, best.p2), center)) {
-               best = s;
-            }
-         }
-         const dir = best.directionVector();
-         let point = average(best.p1, best.p2);
-         if (!best.oneWay) {
-            point = add(point, scale(perpendicular(dir), w.roadWidth / 4)); // right lane
-         }
-         return { point, angle: -angle(dir) - Math.PI / 2 };
-      }
-
+      // Start this generation again, from whatever brains we have
       function restart() {
-         const type = manual ? "KEYS" : "AI";
-         cars = [];
-         for (let i = 0; i < (manual ? 1 : N); i++) {
-            const car = new Car(start.point.x, start.point.y, 30, 50, type, start.angle, 4, "#2266dd");
-            car.lastImprovement = 0;
-            cars.push(car);
-         }
-
-         const saved = loadBrain();
-         if (!manual && saved) {
-            for (let i = 0; i < cars.length; i++) {
-               cars[i].brain = JSON.parse(saved);
-               if (i != 0) {
-                  NeuralNetwork.mutate(cars[i].brain, MUTATION);
-               }
-            }
-         }
-
-         traffic = trafficOn && !isEmpty() ? spawnTraffic() : [];
-         bestCar = cars[0];
-         world.cars = cars;
-         world.traffic = traffic;
-         world.bestCar = bestCar;
-         frame = 0;
+         sim.startGeneration(seedBrains());
          evolveCountdown = -1;
       }
 
-      function isEmpty() {
-         return world.graph.segments.length == 0;
-      }
-
-      function spawnTraffic() {
-         const list = [];
-         for (let i = 0; i < TRAFFIC_COUNT; i++) {
-            const car = spawnTrafficCar(start.point, 350, 2500, list);
-            if (car) {
-               list.push(car);
-            }
+      // Saved progress if there is any; otherwise the shipped pre-trained
+      // brain (unless the user chose to learn from scratch); otherwise random
+      function seedBrains() {
+         const saved = loadSavedBrains();
+         if (saved) {
+            return Genetics.nextGeneration(saved, sim.options.populationSize, sim.options);
          }
-         return list;
-      }
-
-      function spawnTrafficCar(around, minDist, maxDist, others) {
-         for (let tries = 0; tries < 10; tries++) {
-            const edge = network.randomEdgeNear(around, minDist, maxDist);
-            if (!edge) {
-               return null;
-            }
-            const car = new TrafficCar(network, edge);
-            if (others.every((o) => distance(o, car) > 90)) {
-               return car;
-            }
+         if (pretrainedBrain && getSaved("brainMode") != "scratch") {
+            return Genetics.nextGeneration([pretrainedBrain], sim.options.populationSize, sim.options);
          }
          return null;
       }
 
-      // Brains from older versions may have a different shape; ignore those
-      function loadBrain() {
-         const saved = getSaved("bestBrain");
-         if (!saved) {
-            return null;
+      function nextGeneration() {
+         if (sim.manual || sim.isEmpty) {
+            return;
          }
+         chart.add(getGeneration(), ...generationScores());
+         const ranked = [...sim.cars].sort((a, b) => b.fitness - a.fitness);
+         setSaved("brains", JSON.stringify(ranked.slice(0, MAX_SAVED_BRAINS).map((c) => c.brain)));
+         setSaved("generation", String(getGeneration() + 1));
+         if (!sim.trip && sim.bestCar.fitness > getRecord()) {
+            setSaved("record", String(Math.round(sim.bestCar.fitness)));
+         }
+         sim.startGeneration(sim.breed());
+         evolveCountdown = -1;
+      }
+
+      // best and average score, in meters or % of the trip
+      function generationScores() {
+         const scores = sim.cars.map((c) => sim.score(c));
+         return [Math.max(...scores), scores.reduce((a, b) => a + b, 0) / scores.length];
+      }
+
+      function isValidBrain(brain) {
+         const probe = new Car(0, 0, 30, 50, "AI").brain;
+         return (
+            brain && brain.levels && brain.levels.length == probe.levels.length &&
+            brain.levels.every((l, i) =>
+               l.inputs.length == probe.levels[i].inputs.length &&
+               l.outputs.length == probe.levels[i].outputs.length)
+         );
+      }
+
+      // Brains saved by older versions may have a different shape; ignore those
+      function loadSavedBrains() {
          try {
-            const brain = JSON.parse(saved);
-            const probe = new Car(0, 0, 30, 50, "AI");
-            const ok =
-               brain.levels.length == probe.brain.levels.length &&
-               brain.levels.every((l, i) => l.inputs.length == probe.brain.levels[i].inputs.length);
-            return ok ? saved : null;
+            const brains = JSON.parse(getSaved("brains"));
+            return Array.isArray(brains) && brains.length > 0 && brains.every(isValidBrain) ? brains : null;
          } catch (e) {
             return null;
          }
       }
 
-      function nextGeneration() {
-         if (manual || isEmpty()) {
+      async function loadPretrainedBrain() {
+         try {
+            const res = await fetch("data/pretrained-brain.json");
+            const brain = await res.json();
+            if (!isValidBrain(brain)) return;
+            pretrainedBrain = brain;
+            if (!loadSavedBrains() && getSaved("brainMode") != "scratch" && !sim.isEmpty) {
+               restart();
+            }
+         } catch (e) {
+            // no pre-trained brain (e.g. opened as a file): start from random brains
+         }
+      }
+
+      function usePretrained() {
+         if (!pretrainedBrain) {
+            alert("The pre-trained brain isn't available here (open the app through node server.js or the live demo).");
             return;
          }
-         recordGeneration();
-         setSaved("bestBrain", JSON.stringify(bestCar.brain));
-         setSaved("generation", String(getGeneration() + 1));
-         if (!trip && bestCar.fitness > getRecord()) {
-            setSaved("record", String(Math.round(bestCar.fitness)));
-         }
+         setSaved("brains", null);
+         setSaved("brainMode", "pretrained");
+         setSaved("generation", null);
+         chart.reset(sim.scoreUnit);
          restart();
       }
 
-      // Add this generation's best and average score to the chart:
-      // meters from the start, or % of the trip when there's a destination
-      function recordGeneration() {
-         const score = (car) =>
-            trip
-               ? Math.min(100, (car.fitness / trip.route.length) * 100)
-               : car.fitness / Osm.UNITS_PER_METER;
-         const scores = cars.map(score);
-         const average = scores.reduce((a, b) => a + b, 0) / scores.length;
-         chart.add(getGeneration(), Math.max(...scores), average);
-      }
-
       function discardBrain() {
-         if (!confirm("Forget everything the cars have learned?")) {
+         if (!confirm("Forget everything and watch the cars learn from scratch?")) {
             return;
          }
-         setSaved("bestBrain", null);
+         setSaved("brains", null);
+         setSaved("brainMode", "scratch");
          setSaved("generation", null);
          setSaved("record", null);
-         chart.reset(trip ? "%" : "m");
+         chart.reset(sim.scoreUnit);
          restart();
       }
 
       function toggleManual() {
-         manual = !manual;
-         manualBtn.classList.toggle("active", manual);
+         sim.manual = !sim.manual;
+         manualBtn.classList.toggle("active", sim.manual);
          restart();
       }
 
@@ -393,62 +449,15 @@
          trafficOn = !trafficOn;
          trafficBtn.classList.toggle("active", trafficOn);
          setSaved("trafficOn", trafficOn ? "on" : "off");
-         traffic = trafficOn && !isEmpty() ? spawnTraffic() : [];
-         world.traffic = traffic;
+         sim.setTrafficOn(trafficOn);
       }
 
       // ---------- main loop ----------
 
       function animate() {
-         world.update();
-         frame++;
+         sim.step();
 
-         for (const car of traffic) {
-            car.update(traffic);
-         }
-         // keep traffic around the action: recycle cars that got lost or far away
-         if (frame % 30 == 0 && traffic.length > 0) {
-            for (let i = 0; i < traffic.length; i++) {
-               const t = traffic[i];
-               if (t.lost || distance(t, bestCar) > 3000) {
-                  const replacement = spawnTrafficCar(bestCar, 1000, 2500, traffic);
-                  if (replacement) {
-                     traffic[i] = replacement;
-                  }
-               }
-            }
-         }
-
-         for (const car of cars) {
-            if (car.damaged || isEmpty()) {
-               continue;
-            }
-            const near = SpatialGrid.boundsAround(car, 250);
-            const borders = [...borderGrid.query(near)];
-            const nearbyTraffic = traffic.filter(
-               (t) => Math.abs(t.x - car.x) < 250 && Math.abs(t.y - car.y) < 250
-            );
-            car.update(borders, nearbyTraffic);
-            if (trip) {
-               scoreOnRoute(car);
-            } else {
-               // fitness = how far from the start the car has managed to get
-               const d = distance(car, start.point);
-               if (d > car.fitness + 1) {
-                  car.fitness = d;
-                  car.lastImprovement = frame;
-               } else if (!manual && frame - car.lastImprovement > STUCK_FRAMES) {
-                  car.damaged = true; // stuck or going in circles
-               }
-            }
-         }
-
-         bestCar = cars.reduce((best, car) => (car.fitness > best.fitness ? car : best));
-         world.bestCar = bestCar;
-
-         const alive = cars.filter((c) => !c.damaged).length;
-         if (!manual && autoEvolve && !isEmpty() && evolveCountdown < 0 &&
-            (alive == 0 || frame > GENERATION_FRAMES)) {
+         if (autoEvolve && evolveCountdown < 0 && sim.isOver()) {
             evolveCountdown = 45; // short pause so you can see what happened
          }
          if (evolveCountdown > 0) {
@@ -459,35 +468,37 @@
          }
 
          // camera follows the best car
+         const bestCar = sim.bestCar;
          viewport.offset.x = -bestCar.x;
          viewport.offset.y = -bestCar.y;
          viewport.reset();
          const viewPoint = scale(viewport.getOffset(), -1);
          world.draw(carCtx, viewPoint, false, viewport.getRenderRadius());
-         miniMap.update(viewPoint, cars, trip ? trip.route : null);
+         miniMap.update(viewPoint, sim.cars, sim.trip ? sim.trip.route : null);
 
          networkCtx.clearRect(0, 0, networkCanvas.width, networkCanvas.height);
          Visualizer.drawNetwork(networkCtx, bestCar.brain, INPUT_LABELS);
 
-         updateStats(alive);
+         updateStats();
          requestAnimationFrame(animate);
       }
 
-      function updateStats(alive) {
-         if (isEmpty()) {
+      function updateStats() {
+         if (sim.isEmpty) {
             stats.innerHTML = "Search for a place to start.";
             return;
          }
-         if (manual) {
+         const bestCar = sim.bestCar;
+         if (sim.manual) {
             stats.innerHTML = "🕹️ You're driving: arrow keys / WASD<br>Distance: " + meters(bestCar.fitness);
             return;
          }
-         let html = "<b>Generation " + getGeneration() + "</b> · " + alive + "/" + cars.length + " driving";
-         if (trip) {
-            const arrived = cars.filter((c) => c.arrived).length;
-            const best = Math.min(100, Math.round((bestCar.fitness / trip.route.length) * 100));
+         const alive = sim.alive;
+         let html = "<b>Generation " + getGeneration() + "</b> · " + alive + "/" + sim.cars.length + " driving";
+         if (sim.trip) {
+            const arrived = sim.arrived;
             html +=
-               "<br>🏁 Trip " + meters(trip.route.length) + " · best " + best + "%" +
+               "<br>🏁 Trip " + meters(sim.trip.route.length) + " · best " + Math.round(sim.score(bestCar)) + "%" +
                (arrived > 0 ? " · <b>" + arrived + " arrived</b>" : "");
          } else {
             const record = Math.max(getRecord(), bestCar.fitness);
@@ -496,7 +507,7 @@
          if (evolveCountdown > 0) {
             html += "<br>🧬 Evolving…";
          } else if (alive == 0) {
-            html += "<br>Everyone crashed. Press 🧬 Evolve now.";
+            html += "<br>Everyone's out. Press 🧬 Evolve now.";
          }
          stats.innerHTML = html;
       }
@@ -506,11 +517,10 @@
       }
 
       function resize() {
-         const sidebarWidth = 300;
          carCanvas.width = stage.clientWidth;
          carCanvas.height = stage.clientHeight;
          viewport.center = new Point(carCanvas.width / 2, carCanvas.height / 2);
-         networkCanvas.width = sidebarWidth;
+         networkCanvas.width = Math.min(300, sidebar.clientWidth || 300);
          networkCanvas.height = Math.max(
             180,
             sidebar.clientHeight - 300 - simControls.offsetHeight - stats.offsetHeight
@@ -519,95 +529,36 @@
 
       // ---------- GPS trips ----------
 
-      // Progress along the route is the score. Leaving the route (a wrong
-      // turn) or stalling ends the car's run. The GPS inputs tell the brain
-      // whether the route ahead bends left or right of where it's pointing.
-      function scoreOnRoute(car) {
-         const route = trip.route;
-         const loc = route.locate(car, car.routeIndex || 0);
-         car.routeIndex = loc.index;
-
-         if (loc.progress > car.fitness + 1) {
-            car.fitness = loc.progress;
-            car.lastImprovement = frame;
-         } else if (!manual && frame - car.lastImprovement > STUCK_FRAMES) {
-            car.damaged = true;
-         }
-         if (!manual && loc.distance > world.roadWidth * 1.2) {
-            car.damaged = true; // wrong turn
-         }
-         if (loc.progress >= route.length - 40) {
-            car.arrived = true;
-            car.damaged = true; // done driving
-            car.fitness = route.length + (GENERATION_FRAMES - frame); // faster is better
-            return;
-         }
-
-         const ahead = route.pointAt(loc.progress + 180);
-         const desired = -angle(subtract(ahead, car)) - Math.PI / 2;
-         let rel = desired - car.angle;
-         rel = Math.atan2(Math.sin(rel), Math.cos(rel));
-         const clamp = (v) => Math.max(0, Math.min(1, v));
-         car.gpsInputs = [clamp(rel / (Math.PI / 2)), clamp(-rel / (Math.PI / 2))];
-      }
-
       function setTrip(destination) {
-         const origin = getNearestPoint(findStart(world).point, world.graph.points);
-         const path = origin && Pathfinder.shortestPath(world.graph, origin, destination, adjacency);
-         if (!path || path.length < 2) {
+         if (!sim.setTrip(destination)) {
             showHint("Can't drive there from the start (one-way streets?). Try another spot.", 3000);
             return false;
          }
-         const route = new Route(path);
-         trip = { route };
-         world.route = route;
-         world.destination = new Target(destination, new Point(0, -1), world.roadWidth / 2, world.roadWidth / 2);
-
-         // start on the route's first road, in the right lane, facing along it
-         const [a, b] = path;
-         const dir = normalize(subtract(b, a));
-         const seg = world.graph.segments.find((s) => s.includes(a) && s.includes(b));
-         let point = lerp2D(a, b, Math.min(0.5, 60 / distance(a, b)));
-         if (seg && !seg.oneWay) {
-            point = add(point, scale(perpendicular(dir), world.roadWidth / 4));
-         }
-         start = { point, angle: -angle(dir) - Math.PI / 2 };
-         chart.reset("%");
+         chart.reset(sim.scoreUnit);
          restart();
          updateTripButton();
          return true;
       }
 
       function clearTrip() {
-         chart.reset("m");
-         trip = null;
-         world.route = null;
-         world.destination = null;
-         start = findStart(world);
+         sim.clearTrip();
+         chart.reset(sim.scoreUnit);
          restart();
       }
 
       function randomTrip() {
-         if (isEmpty()) return;
+         if (sim.isEmpty) return;
          setPicking(false);
-         const origin = getNearestPoint(findStart(world).point, world.graph.points);
-         const candidates = world.graph.points.filter((p) => {
-            const d = distance(p, origin);
-            return d > 1500 && d < 4500;
-         });
-         const pool = candidates.length > 0 ? candidates : world.graph.points;
-         for (let tries = 0; tries < 25; tries++) {
-            const dest = pool[Math.floor(Math.random() * pool.length)];
-            if (dest != origin && Pathfinder.shortestPath(world.graph, origin, dest, adjacency)) {
-               setTrip(dest);
-               return;
-            }
+         const dest = sim.randomDestination();
+         if (!dest) {
+            showHint("Couldn't find a reachable destination here.", 3000);
+            return;
          }
-         showHint("Couldn't find a reachable destination here.", 3000);
+         setTrip(dest);
       }
 
       function toggleTripPicking() {
-         if (trip && !pickingDestination) {
+         if (sim.trip && !pickingDestination) {
             clearTrip();
             updateTripButton();
             return;
@@ -629,7 +580,7 @@
 
       function updateTripButton() {
          tripBtn.classList.toggle("active", pickingDestination);
-         tripBtn.innerHTML = trip && !pickingDestination
+         tripBtn.innerHTML = sim && sim.trip && !pickingDestination
             ? "<span class='icon'>✖️</span>Clear trip"
             : "<span class='icon'>🏁</span>Destination";
       }
