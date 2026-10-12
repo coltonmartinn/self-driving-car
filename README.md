@@ -14,7 +14,7 @@ Plain JavaScript and HTML canvas, **no libraries and no build step**. It started
 
 ## Quick start
 
-Requires [Node.js](https://nodejs.org) 20 or newer (nothing to install).
+Requires [Node.js](https://nodejs.org) 22 or newer (nothing to install).
 
 ```
 node server.js        # or double-click start.bat on Windows
@@ -60,7 +60,7 @@ flowchart LR
 | Learning | `js/car/network.js`, `js/car/car.js`, `js/car/sensor.js` | Feed-forward network with step activation, mutation-based evolution, ray-cast sensors |
 | Traffic | `js/car/trafficCar.js` | Pure-pursuit steering along lanes, car following, light and stop-sign logic, deadlock recovery |
 | Server | `server.js` | Static files, an Overpass proxy with a proper User-Agent and server fallback, and an on-disk cache |
-| Tests | `tests/` | 33 tests using `node:test`, loading the browser scripts into a `vm` sandbox; CI runs Node 20, 22 and 24 |
+| Tests | `tests/` | 33 tests using `node:test`, loading the browser scripts into a `vm` sandbox; CI runs Node 22 and 24 |
 
 ## Engineering notes
 
