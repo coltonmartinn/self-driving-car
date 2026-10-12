@@ -19,7 +19,7 @@ Plain JavaScript and HTML canvas, with **no libraries and no build step**. It st
 | --- | --- |
 | ![Lesson picker](docs/screenshots/lessons.png) | ![Report card](docs/screenshots/report-card.png) |
 
-Six lessons, from your first drive to a final road test, in five real cities, your own town (search any place), or a city you built yourself:
+Seven lessons, from your first drive to a final road test, in five real cities, your own town (search any place), or a city you built yourself:
 
 | Lesson | What the coach checks |
 | --- | --- |
@@ -28,6 +28,7 @@ Six lessons, from your first drive to a final road test, in five real cities, yo
 | 🚦 Traffic lights | Never crossing the stop line on red |
 | ↪️ Turn signals | Signaling before each turn, and in the right direction |
 | ↔️ Following distance | The 2-second rule, measured from your speed and the gap to the car ahead |
+| 🚶 Crosswalks | Stopping for people on foot, and waiting until they've crossed |
 | 🎓 Road test | Everything at once. Score 80+ with no critical mistakes to pass |
 
 **How the coach works** ([`js/school/coach.js`](js/school/coach.js)). Every frame it compares the car with the world, the way an examiner would:
@@ -36,7 +37,8 @@ Six lessons, from your first drive to a final road test, in five real cities, yo
 - **Following distance.** It finds the nearest car ahead in the same lane, going the same way, and divides the gap by your speed. Under 2 seconds for 1.5 s straight counts as tailgating.
 - **Lane position.** It projects the car onto the nearest road and checks which side of the center line it's on, outside junctions and when driving along the road (so turning across a lane isn't flagged).
 - **Turn signals.** It detects a turn as a big heading change while passing through a junction, then checks which signal was on during the approach. Like a real car, the signal clicks off after the turn.
-- **Crashes.** It tells apart hitting the curb, hitting a car, and being hit while stopped (not your fault, no penalty).
+- **Crosswalks.** Pedestrians wait at the curb for a safe gap, then walk across. Driving into a crosswalk while someone is on the road fails the drive, as on a real test. Traffic stops for them too.
+- **Crashes.** It tells apart hitting the curb, a car, or a pedestrian, and being hit while stopped (not your fault, no penalty).
 
 Mistakes are *minor* (−3), *major* (−10) or *critical* (fails the drive), and each comes with a tip written for new drivers. The coach is plain logic with no drawing, so all of it is unit-tested in Node.
 
@@ -75,7 +77,7 @@ Open http://localhost:8080. The local server proxies map downloads, which makes 
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | 54 tests (`node:test`): geometry, map import, routing, traffic, learning, and the driving coach |
+| `npm test` | 59 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, and the driving coach |
 | `npm run typecheck` | TypeScript checks the plain JavaScript (`checkJs`), with no build step |
 | `npm run lint` | ESLint |
 | `node scripts/train.js --generations 150 --trips-per-gen 3 --out brain.json` | Train a brain headless (see [experiments](docs/experiments/README.md)) |
@@ -103,7 +105,8 @@ flowchart LR
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Driving School | `drive.html`, `js/school/` | Coach, lessons, sign placement, route picking, turn-by-turn directions, touch controls |
+| Driving School | `drive.html`, `js/school/` | Coach, lessons, sign and crosswalk placement, route picking, turn-by-turn directions, touch controls |
+| Pedestrians | `js/pedestrians.js` | People who wait for a gap at crosswalks and walk across; traffic and the coach both respect them |
 | Simulation | `js/simulation.js` | One frame of cars and traffic with no drawing, shared by the browser pages and the headless trainer |
 | Geometry | `js/primitives`, `js/math/utils.js` | Segments, polygons, a crossing-number point-in-polygon test, polygon union for road outlines |
 | Spatial index | `js/math/spatialGrid.js` | Uniform grid that makes the road union, collisions, the coach and rendering scale to large cities |
@@ -139,7 +142,8 @@ js/
   items/             buildings and trees (fake 3D)
   markings/          stop, yield, crossing, parking, light, start, target
   editors/           city builder tools
-  simulation.js      cars + traffic, no drawing (browser and Node)
+  simulation.js      cars + traffic + pedestrians, no drawing (browser and Node)
+  pedestrians.js     people at crosswalks
   places.js          place search and map download
   worldWorker.js     background city building
 data/                bundled cities, pre-trained brain
