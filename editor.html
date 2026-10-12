@@ -3,13 +3,20 @@
 <head>
    <meta charset="UTF-8">
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <title>City Builder</title>
+   <title>City Builder · Self-Driving City</title>
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
    <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-   <header class="editor-header">
-      <a href="index.html" class="back-link">← Real places</a>
-      <h1>Build your own city</h1>
+<body class="editor">
+   <header class="topbar">
+      <a class="brand" href="index.html"><span class="logo"><span>🚗</span></span>Self-Driving City</a>
+      <nav>
+         <a href="drive.html">🚦 Driving School</a>
+         <a href="lab.html">🧠 AI Lab</a>
+         <a href="editor.html" aria-current="page">🏗️ City Builder</a>
+      </nav>
    </header>
    <canvas id="myCanvas"></canvas>
 
@@ -35,7 +42,8 @@
          <button id="targetBtn" onclick="setMode('target')" title="Where the cars should go"><span class="icon">🏁</span>Finish</button>
       </span>
       <span class="group">
-         <button class="primary" onclick="goToSimulator()" title="Save and drive this city in the simulator"><span class="icon">🚗</span>Let's drive</button>
+         <button onclick="goToSimulator()" title="Save, and watch AI cars learn to drive this city"><span class="icon">🧠</span>Train AI here</button>
+         <button class="primary" onclick="goToSchool()" title="Save, and take driving lessons in this city"><span class="icon">🚦</span>Practice driving here</button>
       </span>
    </div>
    <p class="help" id="help"></p>
@@ -220,9 +228,15 @@
          reader.readAsText(file);
       }
 
+      function goToSchool() {
+         if (save()) {
+            location.href = "drive.html?city=mine";
+         }
+      }
+
       function goToSimulator() {
          if (save()) {
-            location.href = "index.html";
+            location.href = "lab.html";
          }
       }
 

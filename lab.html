@@ -3,12 +3,15 @@
 <head>
    <meta charset="UTF-8">
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <title>Self-Driving City</title>
+   <title>AI Lab · Self-Driving City</title>
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
    <link rel="stylesheet" href="styles.css">
 </head>
-<body class="app">
-   <header id="topbar">
-      <div class="brand"><span class="icon">🚗</span> Self-Driving City</div>
+<body class="app lab">
+   <header class="topbar">
+      <a class="brand" href="index.html"><span class="logo"><span>🚗</span></span>Self-Driving City</a>
       <form id="searchForm" class="search-form">
          <input id="searchInput" type="search" placeholder="Search a city, address or zip code…" autocomplete="off">
          <select id="sizeSelect" title="How much of the map to load">
@@ -22,14 +25,18 @@
       <select id="citySelect" title="Ready-made cities that load instantly" style="display: none">
          <option value="">🌆 Featured cities</option>
       </select>
-      <a class="side-link" href="editor.html" title="Design your own city from scratch">🏗️ Build your own city</a>
+      <nav>
+         <a href="drive.html">🚦 Driving School</a>
+         <a href="lab.html" aria-current="page">🧠 AI Lab</a>
+         <a href="editor.html">🏗️ City Builder</a>
+      </nav>
    </header>
 
    <main id="main">
       <div id="stage">
          <canvas id="carCanvas"></canvas>
-         <div id="placeLabel"></div>
-         <div id="hint" style="display: none"></div>
+         <div id="placeLabel" class="pill"></div>
+         <div id="hint" class="pill" style="display: none"></div>
          <div id="chartCard">
             <canvas id="chartCanvas" aria-label="Training progress chart: best and average score per generation"></canvas>
             <table id="chartTable" class="visually-hidden"></table>
@@ -37,10 +44,10 @@
 
          <div id="welcome" class="overlay" style="display: none">
             <div class="card">
-               <h2>Where do you want to drive?</h2>
+               <h2>🧠 Watch an AI learn to drive</h2>
                <p>
-                  Search any real place above. Your cars learn to drive there by trial and
-                  error, among traffic that already knows the rules of the road.
+                  Pick a real place. A hundred cars with tiny neural-network brains learn to
+                  drive there by trial and error, among traffic that already knows the rules.
                </p>
                <p class="muted" id="instantLabel" style="display: none">Load instantly:</p>
                <div class="chips" id="cityChips"></div>
@@ -50,7 +57,8 @@
                   <button class="chip" data-q="Amsterdam">🚲 Amsterdam</button>
                   <button class="chip" data-q="Chicago Loop">🌭 Chicago</button>
                </div>
-               <p class="muted">or <a href="editor.html">build your own city</a></p>
+               <p class="muted">or <a href="editor.html">build your own city</a> ·
+                  want to drive yourself? <a href="drive.html">Driving School</a></p>
             </div>
          </div>
 
@@ -58,12 +66,13 @@
             <div class="card">
                <div class="spinner"></div>
                <p id="loadingText">Loading…</p>
-               <button id="loadingClose" style="display: none" onclick="hideLoading()">OK</button>
+               <button id="loadingClose" class="primary" style="display: none" onclick="hideLoading()">OK</button>
             </div>
          </div>
       </div>
 
       <aside id="sidebar">
+         <h3>Training</h3>
          <div id="simControls">
             <button class="primary" onclick="nextGeneration()" title="Keep the best brain and start the next generation now"><span class="icon">🧬</span>Evolve now</button>
             <button onclick="restart()" title="Restart this generation"><span class="icon">🔁</span>Try again</button>
@@ -78,6 +87,7 @@
             <button onclick="discardBrain()" title="Forget everything learned and watch the cars learn from scratch"><span class="icon">🧹</span>From scratch</button>
          </div>
          <div id="stats"></div>
+         <h3>Best car's brain</h3>
          <canvas id="networkCanvas"></canvas>
          <canvas id="miniMapCanvas"></canvas>
       </aside>
@@ -125,7 +135,7 @@
       const networkCtx = networkCanvas.getContext("2d");
 
       const viewport = new Viewport(carCanvas, 2);
-      const miniMap = new MiniMap(miniMapCanvas, new Graph(), 300);
+      const miniMap = new MiniMap(miniMapCanvas, new Graph(), 286);
       const chart = new TrainingChart(chartCanvas, chartTable);
 
       let world = null;
@@ -520,10 +530,10 @@
          carCanvas.width = stage.clientWidth;
          carCanvas.height = stage.clientHeight;
          viewport.center = new Point(carCanvas.width / 2, carCanvas.height / 2);
-         networkCanvas.width = Math.min(300, sidebar.clientWidth || 300);
+         networkCanvas.width = Math.max(200, (sidebar.clientWidth || 310) - 24);
          networkCanvas.height = Math.max(
-            180,
-            sidebar.clientHeight - 300 - simControls.offsetHeight - stats.offsetHeight
+            160,
+            sidebar.clientHeight - miniMap.size - 12 - simControls.offsetHeight - stats.offsetHeight - 110
          );
       }
 

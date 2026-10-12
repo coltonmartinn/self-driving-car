@@ -1,4 +1,7 @@
 class World {
+   // asphalt, a yellow center line on two-way roads, white edge lines
+   static STYLE = { road: "#575d66", centerLine: "#f2c230", edgeLine: "#f4f4f2" };
+
    constructor(
       graph,
       roadWidth = 140, // 14 m: roomy enough for the learning cars
@@ -442,7 +445,7 @@ class World {
 
       for (const env of this.envelopes) {
          if (inView(env.poly.getBounds())) {
-            env.draw(ctx, { fill: "#BBB", stroke: "#BBB", lineWidth: 15 });
+            env.draw(ctx, { fill: World.STYLE.road, stroke: World.STYLE.road, lineWidth: 15 });
          }
       }
       for (const marking of this.markings) {
@@ -455,12 +458,12 @@ class World {
       }
       for (const seg of this.graph.segments) {
          if (!seg.oneWay && segInView(seg)) {
-            seg.draw(ctx, { color: "white", width: 4, dash: [10, 10] });
+            seg.draw(ctx, { color: World.STYLE.centerLine, width: 4, dash: [18, 14] });
          }
       }
       for (const seg of this.roadBorders) {
          if (segInView(seg)) {
-            seg.draw(ctx, { color: "white", width: 4 });
+            seg.draw(ctx, { color: World.STYLE.edgeLine, width: 4 });
          }
       }
 

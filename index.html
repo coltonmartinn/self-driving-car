@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Self-Driving City · Learn to drive on real streets</title>
+   <meta name="description" content="Practice the rules of the road on real streets, with a coach that grades every drive like a road test. Plus an AI that teaches itself to drive.">
+   <script>
+      // links shared before the Driving School existed pointed here
+      if (/[?&](city|lat)=/.test(location.search)) {
+         location.replace("lab.html" + location.search);
+      }
+   </script>
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+   <link rel="stylesheet" href="styles.css">
+</head>
+<body class="landing">
+   <header class="topbar">
+      <a class="brand" href="index.html"><span class="logo"><span>🚗</span></span>Self-Driving City</a>
+      <nav>
+         <a href="drive.html">🚦 Driving School</a>
+         <a href="lab.html">🧠 AI Lab</a>
+         <a href="editor.html">🏗️ City Builder</a>
+      </nav>
+   </header>
+
+   <main>
+      <section class="hero">
+         <div>
+            <span class="eyebrow">🚦 Free driver's-ed practice</span>
+            <h1>Learn to drive <span class="highlight">before</span> you get behind the wheel.</h1>
+            <p class="lead">
+               Practice stop signs, traffic lights, turn signals and safe following distance on real
+               streets, even your own neighborhood. A coach grades every drive like a road test.
+            </p>
+            <div class="hero-actions">
+               <a class="button primary big" href="drive.html">Start Driving School →</a>
+               <a class="button big" href="lab.html">🧠 Watch an AI learn</a>
+            </div>
+         </div>
+         <div class="hero-art">
+            <img src="docs/screenshots/driving-school.png" alt="A student's car driving down a real street, with directions, speedometer and coach feedback on screen">
+            <div class="floating f1">✅ <div>Full stop at the stop sign<small>Instant feedback from your coach</small></div></div>
+            <div class="floating f2">🎓 <div>Road test: A<small>Score 80+ to pass</small></div></div>
+         </div>
+      </section>
+
+      <section class="section">
+         <h2>Three ways to play</h2>
+         <p>Drive yourself, watch a neural network learn, or design a city for both.</p>
+         <div class="mode-grid">
+            <a class="card mode-card featured" href="drive.html">
+               <span class="emoji">🚦</span>
+               <h3>Driving School</h3>
+               <p>
+                  Six lessons, from your first drive to a full road test. Real intersections,
+                  real traffic, and a report card that explains every mistake.
+               </p>
+               <span class="go">Start lesson 1 →</span>
+            </a>
+            <a class="card mode-card" href="lab.html">
+               <span class="emoji">🧠</span>
+               <h3>AI Lab</h3>
+               <p>100 cars with tiny neural networks learn to drive by trial and error.</p>
+               <span class="go">Watch them learn →</span>
+            </a>
+            <a class="card mode-card" href="editor.html">
+               <span class="emoji">🏗️</span>
+               <h3>City Builder</h3>
+               <p>Draw roads, place signs and lights, then practice on your own creation.</p>
+               <span class="go">Build a city →</span>
+            </a>
+         </div>
+      </section>
+
+      <section class="section">
+         <h2>How Driving School works</h2>
+         <p>Practice the parts of driving that come up on every road test, as many times as you like.</p>
+         <div class="feature-grid">
+            <div class="card feature">
+               <span class="emoji">🗺️</span>
+               <h3>Real streets</h3>
+               <p>Search any town, even your own, and drive its real road layout from OpenStreetMap.</p>
+            </div>
+            <div class="card feature">
+               <span class="emoji">🧑‍🏫</span>
+               <h3>A coach in the passenger seat</h3>
+               <p>Rolling stops, red lights, speeding, tailgating, missed signals: it catches them as they happen.</p>
+            </div>
+            <div class="card feature">
+               <span class="emoji">📋</span>
+               <h3>Graded like a road test</h3>
+               <p>Mistakes cost points, critical ones fail the drive, and every one comes with a tip.</p>
+            </div>
+            <div class="card feature">
+               <span class="emoji">🚙</span>
+               <h3>Traffic that follows the rules</h3>
+               <p>Other cars stop at lights and signs and keep their distance, so you learn to share the road.</p>
+            </div>
+            <div class="card feature">
+               <span class="emoji">🧭</span>
+               <h3>Turn-by-turn directions</h3>
+               <p>Follow the route like a GPS. Miss a turn and it reroutes, just like in a real car.</p>
+            </div>
+            <div class="card feature">
+               <span class="emoji">📱</span>
+               <h3>Keyboard or touch</h3>
+               <p>Drive with WASD or arrow keys, or with on-screen pedals on a phone or tablet.</p>
+            </div>
+         </div>
+      </section>
+
+      <section class="section">
+         <div class="notice">
+            <span>⚠️</span>
+            <div>
+               <b>Practice, not a substitute.</b> This simulator helps you learn the rules, but it doesn't
+               replace a licensed driving instructor, your state's driver's manual, or supervised hours
+               behind the wheel.
+            </div>
+         </div>
+      </section>
+   </main>
+
+   <footer class="footer">
+      <span>Map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></span>
+      <span>Built with vanilla JavaScript and canvas</span>
+      <a href="https://github.com/coltonmartinn/self-driving-car">Source on GitHub</a>
+   </footer>
+</body>
+</html>
