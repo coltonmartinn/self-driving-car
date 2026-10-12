@@ -307,6 +307,21 @@ body.app {
    pointer-events: none;
 }
 
+#hint {
+   position: absolute;
+   bottom: 16px;
+   left: 50%;
+   transform: translateX(-50%);
+   max-width: calc(100% - 32px);
+   padding: 8px 16px;
+   border-radius: 999px;
+   background: rgba(20, 20, 20, 0.85);
+   border: 1px solid #555;
+   font-size: 14px;
+   text-align: center;
+   pointer-events: none;
+}
+
 #placeLabel:empty {
    display: none;
 }

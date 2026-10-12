@@ -1,11 +1,12 @@
 // Draws the best car's neural network: inputs at the bottom, outputs on top.
 // Yellow = positive weight/bias, blue = negative; brightness = strength.
 class Visualizer {
-   static drawNetwork(ctx, network) {
+   static drawNetwork(ctx, network, inputLabels = []) {
       const margin = 50;
-      const left = margin;
+      const sideMargin = 24; // narrower, so 7 inputs fit side by side
+      const left = sideMargin;
       const top = margin;
-      const width = ctx.canvas.width - margin * 2;
+      const width = ctx.canvas.width - sideMargin * 2;
       const height = ctx.canvas.height - margin * 2;
 
       const levelHeight = height / network.levels.length;
@@ -27,13 +28,14 @@ class Visualizer {
             levelTop,
             width,
             levelHeight,
-            i == network.levels.length - 1 ? ["↑", "←", "→", "↓"] : []
+            i == network.levels.length - 1 ? ["↑", "←", "→", "↓"] : [],
+            i == 0 ? inputLabels : []
          );
       }
       ctx.setLineDash([]);
    }
 
-   static drawLevel(ctx, level, left, top, width, height, outputLabels) {
+   static drawLevel(ctx, level, left, top, width, height, outputLabels, inputLabels = []) {
       const right = left + width;
       const bottom = top + height;
 
@@ -61,6 +63,14 @@ class Visualizer {
          ctx.arc(x, bottom, nodeRadius * 0.6, 0, Math.PI * 2);
          ctx.fillStyle = getRGBA(inputs[i] || 0);
          ctx.fill();
+
+         if (inputLabels[i]) {
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            ctx.fillStyle = "#aaa";
+            ctx.font = "10px Arial";
+            ctx.fillText(inputLabels[i], x, bottom + nodeRadius + 4);
+         }
       }
 
       for (let i = 0; i < outputs.length; i++) {

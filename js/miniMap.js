@@ -10,7 +10,7 @@ class MiniMap {
       this.ctx = canvas.getContext("2d");
    }
 
-   update(viewPoint, cars = []) {
+   update(viewPoint, cars = [], route = null) {
       this.ctx.clearRect(0, 0, this.size, this.size);
 
       const scaler = 0.05;
@@ -23,6 +23,11 @@ class MiniMap {
       this.ctx.scale(scaler, scaler);
       for (const seg of this.graph.segments) {
          seg.draw(this.ctx, { width: 3 / scaler, color: "white" });
+      }
+      if (route) {
+         route.draw(this.ctx, { color: "#2b7bff", width: 6 / scaler });
+         const end = route.points[route.points.length - 1];
+         new Point(end.x, end.y).draw(this.ctx, { size: 14 / scaler, color: "red" });
       }
       for (const car of cars) {
          if (!car.damaged) {

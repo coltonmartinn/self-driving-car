@@ -9,6 +9,7 @@ const ROOT = path.join(__dirname, "..", "..");
 const FILES = [
    "js/math/utils.js",
    "js/math/spatialGrid.js",
+   "js/math/pathfinding.js",
    "js/math/graph.js",
    "js/math/osm.js",
    "js/math/worldGenerator.js",
@@ -38,7 +39,7 @@ const EXPORTS = [
    "Point", "Segment", "Polygon", "Envelope", "Graph", "SpatialGrid", "Osm",
    "WorldGenerator", "World", "Building", "Tree", "Marking", "Stop", "Yield",
    "Crossing", "Parking", "Light", "Start", "Target", "Car", "Sensor",
-   "NeuralNetwork", "Level", "TrafficCar", "TrafficNetwork",
+   "NeuralNetwork", "Level", "TrafficCar", "TrafficNetwork", "Pathfinder", "Route", "MinHeap",
    "getIntersection", "distance", "average", "add", "subtract", "scale",
    "normalize", "angle", "lerp", "polysIntersect", "getNearestPoint",
 ];

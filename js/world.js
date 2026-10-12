@@ -33,6 +33,8 @@ class World {
       this.cars = [];
       this.bestCar = null;
       this.traffic = [];
+      this.route = null; // GPS route (a Route) and its destination marker
+      this.destination = null;
       this.frameCount = 0;
       this.intersections = [];
 
@@ -415,6 +417,13 @@ class World {
          if (segInView(seg)) {
             seg.draw(ctx, { color: "white", width: 4 });
          }
+      }
+
+      if (this.route) {
+         this.route.draw(ctx);
+      }
+      if (this.destination) {
+         this.destination.draw(ctx);
       }
 
       for (const car of this.traffic) {
