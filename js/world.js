@@ -40,6 +40,7 @@ class World {
 
       this.zoom = 1;
       this.offset = null;
+      this.roadWidthChanged = false; // set by load() for saves from older versions
 
       this.generate();
    }

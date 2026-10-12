@@ -93,7 +93,6 @@ class Simulation {
       this.cars = [];
       for (let i = 0; i < count; i++) {
          const car = new Car(this.start.point.x, this.start.point.y, 30, 50, type, this.start.angle, 4, "#2266dd");
-         car.lastImprovement = 0;
          if (brains && !this.manual) {
             car.brain = brains[i % brains.length];
          }

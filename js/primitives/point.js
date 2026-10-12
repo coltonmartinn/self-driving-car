@@ -2,6 +2,7 @@ class Point {
    constructor(x, y) {
       this.x = x;
       this.y = y;
+      this.id = undefined; // OpenStreetMap node id, for imported points
    }
 
    equals(point) {

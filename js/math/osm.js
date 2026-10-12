@@ -25,7 +25,7 @@ const Osm = {
    // options: lat0/lon0 = map center (defaults to the data's center),
    // radius = meters; road segments entirely outside it are dropped,
    // allHighways = keep every highway type (for hand-pasted data)
-   parse(data, { lat0, lon0, radius = Infinity, allHighways = false } = {}) {
+   parse(data, { lat0 = undefined, lon0 = undefined, radius = Infinity, allHighways = false } = {}) {
       const nodes = new Map();
       for (const el of data.elements) {
          if (el.type == "node") {

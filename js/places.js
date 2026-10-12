@@ -93,7 +93,7 @@ const Places = {
       );
    },
 
-   async fetchMapData(lat, lon, radius, onStatus = () => {}) {
+   async fetchMapData(lat, lon, radius, onStatus = (message) => {}) {
       const body = "data=" + encodeURIComponent(Places.buildQuery(lat, lon, radius));
       if (await Places.hasServer()) {
          // the server tries every map server in turn, so allow plenty of time
@@ -168,7 +168,7 @@ const Places = {
       return world;
    },
 
-   async loadPlace(place, onStatus = () => {}) {
+   async loadPlace(place, onStatus = (message) => {}) {
       onStatus("Downloading roads and buildings around " + Places.shortName(place.name) + "…");
       const data = await Places.fetchMapData(place.lat, place.lon, place.radius, onStatus);
       onStatus("Building the city…");

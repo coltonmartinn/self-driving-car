@@ -12,6 +12,9 @@ class Car {
       this.angle = angle; // 0 = facing up (-y)
       this.damaged = false;
       this.fitness = 0; // scored by the simulator (how far the car got)
+      this.arrived = false; // reached the trip's destination
+      this.lastImprovement = 0; // frame when the fitness last went up
+      this.routeIndex = 0; // which piece of the trip's route the car is on
       this.color = color;
 
       this.useBrain = controlType == "AI";
