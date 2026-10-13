@@ -1761,6 +1761,139 @@ button.badge {
    background: var(--good);
 }
 
+/* Practice log */
+.log-title {
+   font-size: clamp(24px, 4vw, 32px);
+   margin: 10px 0 2px;
+}
+
+.goal-row {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 16px;
+   margin: 16px 0 12px;
+}
+
+.goal-head {
+   display: flex;
+   align-items: baseline;
+   gap: 8px;
+   margin-bottom: 6px;
+}
+
+.goal-head b {
+   font-size: 26px;
+}
+
+.goal-head span {
+   color: var(--muted);
+   font-size: 14px;
+}
+
+.goal-head input {
+   width: 64px;
+   min-height: 30px;
+   padding: 2px 8px;
+   text-align: center;
+}
+
+.progress-bar {
+   height: 12px;
+   border-radius: 99px;
+   background: var(--surface-2);
+   overflow: hidden;
+}
+
+.progress-bar > div {
+   height: 100%;
+   border-radius: 99px;
+   background: var(--accent);
+   transition: width 0.4s;
+}
+
+.progress-bar.night > div {
+   background: #6b4cf5;
+}
+
+.log-form {
+   display: grid;
+   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+   gap: 12px;
+   align-items: end;
+}
+
+.log-form label,
+.log-form .label {
+   display: grid;
+   gap: 4px;
+   font-size: 13px;
+   font-weight: 700;
+   color: var(--muted);
+}
+
+.log-form input[type="date"],
+.log-form input[type="number"],
+.log-form input[type="text"] {
+   min-height: 40px;
+   padding: 8px 14px;
+   border: 1px solid var(--border);
+   border-radius: 12px;
+   background: var(--surface);
+   color: var(--text);
+   font: 500 15px var(--font);
+}
+
+.log-form label.check {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   min-height: 40px;
+   font-size: 15px;
+   color: var(--text);
+}
+
+.log-form .full {
+   grid-column: 1 / -1;
+}
+
+.form-actions {
+   display: flex;
+   align-items: center;
+   gap: 12px;
+}
+
+.small-btn {
+   min-height: 28px;
+   padding: 2px 10px;
+}
+
+.print-only {
+   display: none;
+}
+
+.signature {
+   justify-content: space-between;
+   margin-top: 40px;
+   font-size: 14px;
+}
+
+@media print {
+   .print-only {
+      display: flex !important;
+   }
+
+   .quiz-page .card {
+      box-shadow: none;
+      border: none;
+   }
+}
+
+@media (max-width: 760px) {
+   .goal-row {
+      grid-template-columns: 1fr;
+   }
+}
+
 @media (max-width: 760px) {
    .quiz-card {
       padding: 20px 16px;

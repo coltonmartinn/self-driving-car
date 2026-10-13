@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Practice Log · Self-Driving City</title>
+   <meta name="description" content="Log supervised practice drives toward a learner's permit hour requirement, with night hours, conditions and a printable record.">
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+   <link rel="stylesheet" href="styles.css">
+   <link rel="manifest" href="manifest.webmanifest">
+   <meta name="theme-color" content="#2457f5">
+   <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+   <script src="js/pwa.js" defer></script>
+</head>
+<body class="quiz-page">
+   <header class="topbar">
+      <a class="brand" href="index.html"><span class="logo"><span>🚗</span></span>Self-Driving City</a>
+      <nav>
+         <a href="drive.html">🚦 Driving School</a>
+         <a href="quiz.html">📝 Permit quiz</a>
+         <a href="log.html" aria-current="page">🗒️ Practice log</a>
+         <a href="lab.html">🧠 AI Lab</a>
+         <button class="install-btn" data-install hidden>⬇️ Install app</button>
+      </nav>
+   </header>
+
+   <main class="class-main">
+      <section class="card quiz-card">
+         <div class="report-top">
+            <div>
+               <span class="eyebrow no-print">🗒️ For learners and their supervising drivers</span>
+               <h1 class="log-title">Supervised practice log</h1>
+               <p class="muted" id="logWho"></p>
+            </div>
+            <span class="logo"><span>🚗</span></span>
+         </div>
+         <p class="muted no-print">
+            Log real drives with a licensed adult. Most states require a set number of supervised hours
+            (often 40–60, some of them at night) before a road test. Check your state's rules and set your goal below.
+         </p>
+
+         <div class="goal-row">
+            <div class="goal">
+               <div class="goal-head"><b id="hoursText"></b><span>of <input id="goalHours" type="number" min="1" max="200" aria-label="Goal hours"> hours</span></div>
+               <div class="progress-bar"><div id="hoursBar"></div></div>
+            </div>
+            <div class="goal">
+               <div class="goal-head"><b id="nightText"></b><span>of <input id="goalNight" type="number" min="0" max="100" aria-label="Goal night hours"> at night</span></div>
+               <div class="progress-bar night"><div id="nightBar"></div></div>
+            </div>
+         </div>
+         <div class="chips" id="conditionTotals"></div>
+      </section>
+
+      <section class="card quiz-card no-print">
+         <h2>Add a drive</h2>
+         <form id="driveForm" class="log-form">
+            <label>Date <input id="fDate" type="date" required></label>
+            <label>Minutes <input id="fMinutes" type="number" min="1" max="600" placeholder="45" required></label>
+            <label class="check"><input id="fNight" type="checkbox"> 🌙 At night</label>
+            <label>Supervisor <input id="fSupervisor" type="text" placeholder="Name or initials" maxlength="60"></label>
+            <div class="full">
+               <span class="label">Conditions</span>
+               <div class="chips" id="fConditions"></div>
+            </div>
+            <label class="full">Notes <input id="fNotes" type="text" placeholder="What you practiced, what went well, what to work on" maxlength="300"></label>
+            <div class="full form-actions">
+               <button class="primary" type="submit">➕ Add drive</button>
+               <span class="status" id="formStatus"></span>
+            </div>
+         </form>
+      </section>
+
+      <section class="card quiz-card no-print" id="ideasCard" hidden>
+         <h2>Practice ideas for your next drive</h2>
+         <p class="muted">Based on the mistakes that keep coming up in Driving School.</p>
+         <ul class="report-list" id="ideas"></ul>
+      </section>
+
+      <section class="card quiz-card">
+         <div class="report-top">
+            <h2>Drives</h2>
+            <div class="chips no-print">
+               <button onclick="downloadCsv()">⬇️ Download CSV</button>
+               <button onclick="window.print()">🖨️ Print</button>
+            </div>
+         </div>
+         <div class="table-scroll">
+            <table class="lesson-table" id="logTable"></table>
+         </div>
+         <p class="cert-note">
+            Kept in this browser on this device. Print or download it regularly to keep a copy.
+            Where your state requires a signed log, use its official form.
+         </p>
+         <div class="signature print-only">
+            <span>Supervising driver signature: ______________________</span>
+            <span>Date: ____________</span>
+         </div>
+      </section>
+   </main>
+
+   <script src="js/school/coach.js"></script>
+   <script src="js/school/lessons.js"></script>
+   <script src="js/school/progress.js"></script>
+   <script src="js/school/practiceLog.js"></script>
+   <script>
+      const load = (key, fallback) => {
+         try {
+            return JSON.parse(localStorage.getItem(key)) ?? fallback;
+         } catch (e) {
+            return fallback;
+         }
+      };
+      const store = (key, value) => {
+         try {
+            localStorage.setItem(key, JSON.stringify(value));
+         } catch (e) {}
+      };
+
+      let entries = load("practice-log", []);
+      let goal = load("practice-goal", { hours: 50, nightHours: 10 });
+      const picked = new Set();
+
+      fDate.value = new Date().toISOString().slice(0, 10);
+      goalHours.value = goal.hours;
+      goalNight.value = goal.nightHours;
+      for (const c of PracticeLog.CONDITIONS) {
+         const chip = document.createElement("button");
+         chip.type = "button";
+         chip.className = "chip";
+         chip.textContent = c;
+         chip.addEventListener("click", () => {
+            picked.has(c) ? picked.delete(c) : picked.add(c);
+            chip.classList.toggle("active", picked.has(c));
+         });
+         fConditions.append(chip);
+      }
+
+      for (const input of [goalHours, goalNight]) {
+         input.addEventListener("change", () => {
+            goal = { hours: Math.max(1, Number(goalHours.value) || 50), nightHours: Math.max(0, Number(goalNight.value) || 0) };
+            store("practice-goal", goal);
+            render();
+         });
+      }
+
+      driveForm.addEventListener("submit", (evt) => {
+         evt.preventDefault();
+         try {
+            const e = PracticeLog.entry({
+               date: fDate.value, minutes: fMinutes.value, night: fNight.checked,
+               conditions: [...picked], notes: fNotes.value, supervisor: fSupervisor.value,
+            });
+            entries.push(e);
+            store("practice-log", entries);
+            formStatus.textContent = "✓ Added " + e.minutes + " minutes";
+            fMinutes.value = "";
+            fNotes.value = "";
+            fNight.checked = false;
+            picked.clear();
+            for (const chip of fConditions.children) chip.classList.remove("active");
+            render();
+         } catch (err) {
+            formStatus.textContent = "😕 " + err.message;
+         }
+      });
+
+      function render() {
+         const t = PracticeLog.totals(entries, goal);
+         const name = localStorage.getItem("school-name");
+         logWho.textContent = (name ? name + " · " : "") + t.sessions + " drive" + (t.sessions == 1 ? "" : "s") + " logged";
+         hoursText.textContent = t.hours.toFixed(1) + " h";
+         nightText.textContent = t.nightHours.toFixed(1) + " h";
+         hoursBar.style.width = t.percent + "%";
+         nightBar.style.width = t.nightPercent + "%";
+         conditionTotals.innerHTML = Object.entries(t.byCondition)
+            .filter(([, m]) => m > 0)
+            .map(([c, m]) => "<span class='badge'>" + c + " · " + (m / 60).toFixed(1) + " h</span>").join("") +
+            (t.done ? "<span class='badge good'>🎉 Goal reached</span>" : "");
+
+         const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+         logTable.innerHTML = sorted.length == 0
+            ? "<tr><td class='muted'>No drives yet. Add your first one above.</td></tr>"
+            : "<tr><th>Date</th><th>Time</th><th>Night</th><th>Conditions</th><th>Supervisor</th><th>Notes</th><th class='no-print'></th></tr>" +
+               sorted.map((e) =>
+                  "<tr><td>" + e.date + "</td><td>" + e.minutes + " min</td><td>" + (e.night ? "🌙" : "") + "</td><td>" +
+                  esc(e.conditions.join(", ")) + "</td><td>" + esc(e.supervisor) + "</td><td>" + esc(e.notes) + "</td>" +
+                  "<td class='no-print'><button class='ghost small-btn' aria-label='Delete this drive' onclick=\"removeEntry('" + e.id + "')\">✕</button></td></tr>"
+               ).join("");
+
+         // practice ideas from the simulator
+         const history = load("school-history", []);
+         const focus = Progress.summarize(history, LESSONS, DrivingCoach.RULES).focus;
+         const practiceIdeas = PracticeLog.suggestions(focus);
+         ideasCard.hidden = practiceIdeas.length == 0;
+         ideas.innerHTML = practiceIdeas.map((i) => "<li><span>💡</span><div><b>" + esc(i.title) + "</b><span class='tip'>" + esc(i.idea) + "</span></div></li>").join("");
+      }
+
+      function removeEntry(id) {
+         if (!confirm("Delete this drive from the log?")) return;
+         entries = entries.filter((e) => e.id != id);
+         store("practice-log", entries);
+         render();
+      }
+
+      function downloadCsv() {
+         const a = document.createElement("a");
+         a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(PracticeLog.toCsv(entries));
+         a.download = "practice-log.csv";
+         a.click();
+      }
+
+      function esc(text) {
+         const div = document.createElement("div");
+         div.textContent = text;
+         return div.innerHTML;
+      }
+
+      render();
+   </script>
+</body>
+</html>

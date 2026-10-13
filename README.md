@@ -50,6 +50,7 @@ Mistakes are *minor* (−3), *major* (−10) or *critical* (fails the drive), an
 - **Progress report.** Lessons passed, practice time, recent drives, and the mistakes that keep coming up, each with a tip. It prints cleanly, and a student can send it as a link that carries the whole report.
 - **Class view** ([`class.html`](class.html)). A teacher pastes the students' links to see the class in one table, plus the mistakes most students make, to teach next. Nothing is uploaded.
 - **Permit test practice** ([`quiz.html`](quiz.html)). 40 rules-of-the-road questions (signs, signals, right-of-way, lane markings, safe driving), each with an explanation.
+- **Supervised practice log** ([`log.html`](log.html)). Logs real drives with a parent toward the hours most states require, including night hours and conditions. It suggests what to practice next, based on the student's simulator mistakes, and exports to CSV or print.
 - **Certificate.** Passing the road test unlocks a printable practice certificate.
 - **Installable app.** It installs to a phone, tablet or Chromebook home screen and works offline, thanks to a service worker that saves every page and city.
 
@@ -88,7 +89,7 @@ Open http://localhost:8080. The local server proxies map downloads, which makes 
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | 75 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, the driving coach, progress reports, the quiz, and offline caching |
+| `npm test` | 79 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, the driving coach, progress reports, the quiz, and offline caching |
 | `npm run typecheck` | TypeScript checks the plain JavaScript (`checkJs`), with no build step |
 | `npm run lint` | ESLint |
 | `node scripts/train.js --generations 150 --trips-per-gen 3 --out brain.json` | Train a brain headless (see [experiments](docs/experiments/README.md)) |
@@ -145,6 +146,7 @@ flowchart LR
 index.html           landing page
 drive.html           Driving School (lessons, progress report, certificate)
 quiz.html            permit test practice
+log.html             supervised practice hours log
 class.html           class view for teachers
 sw.js                offline support (service worker)
 lab.html             AI Lab: training, GPS trips, network view
