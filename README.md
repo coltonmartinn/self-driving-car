@@ -51,7 +51,7 @@ Mistakes are *minor* (−3), *major* (−10) or *critical* (fails the drive), an
 - **Class view** ([`class.html`](class.html)). A teacher pastes the students' links to see the class in one table, plus the mistakes most students make, to teach next. Nothing is uploaded.
 - **Permit test practice** ([`quiz.html`](quiz.html)). 40 rules-of-the-road questions (signs, signals, right-of-way, lane markings, safe driving), each with an explanation.
 - **Supervised practice log** ([`log.html`](log.html)). Logs real drives with a parent toward the hours most states require, including night hours and conditions. It suggests what to practice next, based on the student's simulator mistakes, and exports to CSV or print.
-- **Certificate.** Passing the road test unlocks a printable practice certificate.
+- **Certificate and badges.** Passing the road test unlocks a printable practice certificate, and 12 badges reward milestones such as a clean drive, Night & rain, a 90%+ permit quiz, or 5 logged real drives.
 - **Installable app.** It installs to a phone, tablet or Chromebook home screen and works offline, thanks to a service worker that saves every page and city.
 
 **Built for learning to drive.** Directions are turn-by-turn and reroute after a missed turn. The view turns with the car, so ahead is always up. US-style signs, speed limits in mph, keyboard or on-screen pedals. Progress is saved per lesson.
@@ -89,7 +89,7 @@ Open http://localhost:8080. The local server proxies map downloads, which makes 
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | 79 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, the driving coach, progress reports, the quiz, and offline caching |
+| `npm test` | 82 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, the driving coach, progress reports, the quiz, and offline caching |
 | `npm run typecheck` | TypeScript checks the plain JavaScript (`checkJs`), with no build step |
 | `npm run lint` | ESLint |
 | `node scripts/train.js --generations 150 --trips-per-gen 3 --out brain.json` | Train a brain headless (see [experiments](docs/experiments/README.md)) |

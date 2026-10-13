@@ -1281,6 +1281,47 @@ body.touch #toasts {
    background: linear-gradient(180deg, rgba(255, 197, 51, 0.16), transparent);
 }
 
+/* Badges */
+.badge-shelf {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: 6px;
+   margin: -4px 0 14px;
+}
+
+.badge-icon {
+   display: grid;
+   place-items: center;
+   width: 34px;
+   height: 34px;
+   border-radius: 50%;
+   background: var(--surface-2);
+   font-size: 18px;
+   filter: grayscale(1);
+   opacity: 0.45;
+   cursor: help;
+}
+
+.badge-icon.earned {
+   filter: none;
+   opacity: 1;
+   background: linear-gradient(135deg, #fff3c4, #ffd56a);
+   box-shadow: 0 0 0 2px var(--sun);
+}
+
+.badge-count {
+   margin-left: 4px;
+   font-size: 13px;
+   font-weight: 700;
+   color: var(--muted);
+}
+
+.new-badge {
+   background: linear-gradient(135deg, rgba(255, 213, 106, 0.35), rgba(255, 243, 196, 0.2)) !important;
+   animation: toast-in 0.4s ease-out;
+}
+
 /* Lesson intro */
 #lessonIntro .emoji-big {
    font-size: 42px;

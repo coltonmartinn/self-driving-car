@@ -89,6 +89,7 @@
                      <button class="badge" onclick="showProgress()">📋 Progress report</button>
                   </div>
                </div>
+               <div class="badge-shelf" id="badgeShelf" aria-label="Badges"></div>
                <div class="where">
                   <span class="label">📍 Where:</span>
                   <div class="chips" id="cityChips"></div>
@@ -152,6 +153,7 @@
                <div class="stat-row" id="reportStats"></div>
                <div id="reportMistakes"></div>
                <div id="reportPraise"></div>
+               <div id="reportBadges"></div>
                <div class="card-actions">
                   <button class="ghost" onclick="showPicker()">All lessons</button>
                   <button onclick="beginDrive(true)">↻ Try again</button>
@@ -255,6 +257,7 @@
    <script src="js/school/playerControls.js"></script>
    <script src="js/school/sounds.js"></script>
    <script src="js/school/hazards.js"></script>
+   <script src="js/school/badges.js"></script>
    <script src="js/school/progress.js"></script>
    <script>
       const ctx = carCanvas.getContext("2d");
@@ -451,6 +454,7 @@
          const passed = LESSONS.filter((l) => progress[l.id] && progress[l.id].passed).length;
          progressBadge.textContent = passed + " of " + LESSONS.length + " lessons passed";
          certifiedBtn.style.display = progress.roadtest && progress.roadtest.passed ? "" : "none";
+         renderBadges();
 
          lessonGrid.innerHTML = "";
          LESSONS.forEach((l, i) => {
@@ -932,10 +936,18 @@
             saveResult(lesson.id, s, passed);
             sounds.finish(passed);
          }
+         reportBadges.innerHTML = "";
          if (coach.frame > 300) {
             // every real attempt counts toward the progress report
+            const before = currentBadges();
             const drive = Progress.record(lesson, s, { ended: endReason, city: cityName() });
             setSaved("school-history", JSON.stringify(Progress.add(getHistory(), drive)));
+            const fresh = Badges.newlyEarned(before, currentBadges());
+            if (fresh.length > 0) {
+               reportBadges.innerHTML = "<p class='report-section'>New badge" + (fresh.length > 1 ? "s" : "") + "</p><ul class='report-list'>" +
+                  fresh.map((b) => "<li class='new-badge'><span>" + b.emoji + "</span><div><b>" + b.title + "</b><span class='tip'>" +
+                  b.about + "</span></div></li>").join("") + "</ul>";
+            }
          }
          certificateBtn.style.display = passed && exam ? "" : "none";
          show(reportCard);
@@ -1027,6 +1039,24 @@
          } else {
             prompt("Copy this link:", url);
          }
+      }
+
+      // ---------- badges ----------
+
+      function currentBadges() {
+         let log = [];
+         try {
+            log = JSON.parse(getSaved("practice-log")) || [];
+         } catch (e) {}
+         return Badges.earned({ history: getHistory(), quiz: getQuiz(), log, lessons: LESSONS });
+      }
+
+      function renderBadges() {
+         const earned = new Set(currentBadges());
+         badgeShelf.innerHTML = BADGES.map((b) =>
+            "<span class='badge-icon" + (earned.has(b.id) ? " earned" : "") + "' title='" + b.title + ": " + b.about +
+            (earned.has(b.id) ? " ✓" : " (locked)") + "'>" + b.emoji + "</span>").join("") +
+            "<span class='badge-count'>" + earned.size + "/" + BADGES.length + " badges</span>";
       }
 
       // ---------- certificate ----------
