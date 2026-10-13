@@ -14,6 +14,7 @@ class Pedestrian {
       this.shirt = Pedestrian.SHIRTS[Math.floor(random() * Pedestrian.SHIRTS.length)];
       this.skin = Pedestrian.SKIN[Math.floor(random() * Pedestrian.SKIN.length)];
       this.isPedestrian = true;
+      this.jaywalking = false; // crossing away from a crosswalk (a Driving School hazard)
       this.x = 0;
       this.y = 0;
       this.polygon = [];

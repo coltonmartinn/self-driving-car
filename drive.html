@@ -248,6 +248,7 @@
    <script src="js/school/lessons.js"></script>
    <script src="js/school/playerControls.js"></script>
    <script src="js/school/sounds.js"></script>
+   <script src="js/school/hazards.js"></script>
    <script src="js/school/progress.js"></script>
    <script>
       const ctx = carCanvas.getContext("2d");
@@ -271,6 +272,10 @@
       let endTimer = -1;
       let endReason = null;
       let offRouteFrames = 0;
+      let hazards = null; // surprise events, in the Hazards lesson
+      const lightCanvas = document.createElement("canvas"); // night: where light falls
+      const lightCtx = lightCanvas.getContext("2d");
+      const raindrops = [];
       const camera = { x: 0, y: 0, angle: 0, zoom: 1.6 };
 
       if (matchMedia("(pointer: coarse)").matches) {
@@ -523,7 +528,14 @@
          car.speedSteering = true;
          car.turnRate = 0.032;
 
-         coach = new DrivingCoach(world, car, { speedLimit: lesson.speedLimit, rules: lesson.rules });
+         if (lesson.conditions && lesson.conditions.rain) {
+            car.brakePower = 0.032; // wet road: brakes grip less
+            car.friction = 0.006;
+         }
+         coach = new DrivingCoach(world, car, {
+            speedLimit: lesson.speedLimit, rules: lesson.rules, followSeconds: lesson.followSeconds || 2,
+         });
+         hazards = lesson.hazards ? new Hazards(sim) : null;
          turns = DrivingSchool.turnsOf(sim.trip.route, DrivingSchool.junctionsOf(world));
          camera.x = car.x;
          camera.y = car.y;
@@ -592,6 +604,14 @@
                if (endTimer > 0 && --endTimer == 0) {
                   endDrive(car.arrived ? "arrived" : "crash");
                }
+               if (hazards) {
+                  const h = hazards.update(car);
+                  if (h && h.type == "done" && h.handled) {
+                     const detail = h.reaction != null ? "braked in " + h.reaction.toFixed(1) + " s" : "had room to spare";
+                     const event = coach.report("hazard_avoided", { detail });
+                     if (event) toast(event);
+                  }
+               }
                checkRoute();
                followCar();
                updateHud();
@@ -656,6 +676,105 @@
          if (driving && car) {
             car.draw(ctx); // on top, so tall buildings never hide you
          }
+         const conditions = driving && lesson && lesson.conditions;
+         if (conditions && conditions.night) drawNight(view);
+         if (conditions && conditions.rain) drawRain(!conditions.night);
+      }
+
+      // ---------- night and rain ----------
+
+      // Darkness everywhere except where headlights and streetlights shine
+      function drawNight(view) {
+         const w = carCanvas.width;
+         const h = carCanvas.height;
+         if (lightCanvas.width != w || lightCanvas.height != h) {
+            lightCanvas.width = w;
+            lightCanvas.height = h;
+         }
+         const l = lightCtx;
+         l.setTransform(1, 0, 0, 1, 0, 0);
+         l.globalCompositeOperation = "source-over";
+         l.fillStyle = "rgba(4, 8, 24, 0.82)";
+         l.fillRect(0, 0, w, h);
+         l.setTransform(ctx.getTransform());
+         l.globalCompositeOperation = "destination-out";
+
+         const glow = (x, y, r, alpha) => {
+            const g = l.createRadialGradient(x, y, 0, x, y, r);
+            g.addColorStop(0, "rgba(0,0,0," + alpha + ")");
+            g.addColorStop(1, "rgba(0,0,0,0)");
+            l.fillStyle = g;
+            l.beginPath();
+            l.arc(x, y, r, 0, Math.PI * 2);
+            l.fill();
+         };
+         const far = Math.hypot(w, h) * camera.zoom;
+         for (const p of world.intersections) {
+            if (distance(p, view) < far) glow(p.x, p.y, 170, 0.6); // streetlights
+         }
+         const beam = (c, length, alpha) => {
+            const heading = new Point(-Math.sin(c.angle), -Math.cos(c.angle));
+            const side = perpendicular(heading);
+            const front = add(c, scale(heading, c.height / 2));
+            const g = l.createRadialGradient(front.x, front.y, 0, front.x, front.y, length);
+            g.addColorStop(0, "rgba(0,0,0," + alpha + ")");
+            g.addColorStop(1, "rgba(0,0,0,0)");
+            l.fillStyle = g;
+            l.beginPath();
+            const a = add(front, scale(side, c.width / 2));
+            const b = add(front, scale(side, -c.width / 2));
+            const tip = add(front, scale(heading, length));
+            l.moveTo(a.x, a.y);
+            l.lineTo(add(tip, scale(side, length * 0.45)).x, add(tip, scale(side, length * 0.45)).y);
+            l.lineTo(add(tip, scale(side, -length * 0.45)).x, add(tip, scale(side, -length * 0.45)).y);
+            l.lineTo(b.x, b.y);
+            l.fill();
+            glow(c.x, c.y, c == car ? 110 : 45, 0.55); // the car (and around yours) stays visible
+         };
+         for (const t of sim.traffic) {
+            if (distance(t, view) < far) beam(t, 230, 0.85);
+         }
+         if (sim.crowd) {
+            for (const p of sim.crowd.people) glow(p.x, p.y, 26, 0.35);
+         }
+         beam(car, 380, 0.95);
+
+         ctx.save();
+         ctx.setTransform(1, 0, 0, 1, 0, 0);
+         ctx.drawImage(lightCanvas, 0, 0);
+         ctx.restore();
+      }
+
+      // Rain streaks over the view (and a gray sky when it isn't night)
+      function drawRain(gray) {
+         const w = carCanvas.width;
+         const h = carCanvas.height;
+         ctx.save();
+         ctx.setTransform(1, 0, 0, 1, 0, 0);
+         if (gray) {
+            ctx.fillStyle = "rgba(40, 52, 70, 0.28)";
+            ctx.fillRect(0, 0, w, h);
+         }
+         while (raindrops.length < 160) {
+            raindrops.push({ x: Math.random() * w, y: Math.random() * h, len: 10 + Math.random() * 14, v: 9 + Math.random() * 6 });
+         }
+         ctx.strokeStyle = "rgba(190, 210, 255, 0.45)";
+         ctx.lineWidth = 1.3;
+         ctx.beginPath();
+         for (const d of raindrops) {
+            if (state == "driving") {
+               d.y += d.v;
+               d.x -= d.v * 0.25;
+               if (d.y > h || d.x < 0) {
+                  d.y = -d.len;
+                  d.x = Math.random() * (w + 100);
+               }
+            }
+            ctx.moveTo(d.x, d.y);
+            ctx.lineTo(d.x + d.len * 0.25, d.y - d.len);
+         }
+         ctx.stroke();
+         ctx.restore();
       }
 
       // ---------- HUD ----------
@@ -752,7 +871,11 @@
             [formatFeet(s.distanceMeters * Osm.UNITS_PER_METER), "driven"],
             [minutes + ":" + String(seconds).padStart(2, "0"), "time"],
             [s.topSpeed + " mph", "top speed"],
-            lesson.id == "stops" ? [s.fullStops, "full stops"]
+            lesson.id == "hazards" ? [
+               hazards && hazards.averageReaction != null ? hazards.averageReaction.toFixed(1) + " s" : "–",
+               "avg reaction (most drivers: 1.5 s)",
+            ]
+            : lesson.id == "stops" ? [s.fullStops, "full stops"]
                : lesson.id == "pedestrians" ? [s.praise.filter((e) => e.rule == "yielded_pedestrian").length, "people yielded to"]
                   : [s.signaledTurns + "/" + s.turns, "turns signaled"],
          ];

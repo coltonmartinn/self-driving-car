@@ -6,7 +6,7 @@ const { loadApp } = require("./helpers/loadApp");
 
 const {
    Point, Segment, Graph, World, Car, Light, Stop, Route, Simulation, Crossing,
-   WorldGenerator, DrivingSchool, DrivingCoach, LESSONS, distance, Pedestrian, Crowd, TrafficCar, TrafficNetwork,
+   WorldGenerator, DrivingSchool, DrivingCoach, LESSONS, distance, Pedestrian, Crowd, TrafficCar, TrafficNetwork, Hazards,
 } = loadApp({ seed: 3 });
 
 // A road going north from (0, 0), with a road to the east at y = -1500
@@ -387,4 +387,90 @@ test("streets without crosswalks get some mid-block, and the crosswalk lesson fi
    const sim = new Simulation(world, { trafficOn: false });
    assert.ok(DrivingSchool.pickTrip(sim, "crossings", 20));
    assert.ok(DrivingSchool.features(sim.trip.route, world).crossings >= 1);
+});
+
+// ---------- hazards ----------
+
+// A student driving north on the long road, with a trip to the far end
+function hazardSim({ pedestrians = false } = {}) {
+   const { world, b } = tJunction();
+   const controls = { forward: false, reverse: false, left: false, right: false, signal: null };
+   const sim = new Simulation(world, { trafficOn: false, pedestrians, playerControls: controls });
+   sim.setTrip(b);
+   sim.manual = true;
+   sim.startGeneration();
+   const car = sim.cars[0];
+   car.maxSpeed = 2;
+   car.controls.forward = true;
+   return { world, sim, car };
+}
+
+test("the car ahead brakes hard; reaction time is measured until you brake", () => {
+   const { world, sim, car } = hazardSim();
+   const network = new TrafficNetwork(world);
+   for (let i = 0; i < 60; i++) sim.step(); // get moving
+   // the lead car goes 250 units ahead, on whichever road piece that is
+   const leadY = car.y - 250;
+   const edge = network.edges.find((e) => e.from.x == 0 && e.to.x == 0 && e.from.y > leadY && e.to.y <= leadY);
+   const lead = new TrafficCar(network, edge, (edge.from.y - leadY) / (edge.from.y - edge.to.y));
+   lead.speed = 2;
+   sim.traffic = [lead];
+   const hazards = new Hazards(sim, { first: 0, random: () => 0.5 });
+
+   let started = null;
+   for (let i = 0; i < 5 && !started; i++) {
+      sim.step();
+      started = hazards.update(car);
+   }
+   assert.equal(started && started.kind, "brake");
+   assert.ok(lead.hazardBrake > 0);
+   for (let i = 0; i < 30; i++) {
+      sim.step();
+      hazards.update(car);
+   }
+   // braking hard, but like a real car (about 0.025 units/frame each frame)
+   assert.ok(lead.speed < 1.5 && lead.speed > 1, "lead speed " + lead.speed);
+   car.controls.forward = false;
+   car.controls.reverse = true; // the student reacts after half a second
+   let done = null;
+   for (let i = 0; i < 400 && !done; i++) {
+      sim.step();
+      if (car.speed <= 0) car.controls.reverse = false;
+      done = hazards.update(car);
+   }
+   assert.equal(done.type, "done");
+   assert.equal(done.handled, true);
+   assert.ok(Math.abs(done.reaction - 31 / 60) < 0.05, "reaction " + done.reaction);
+});
+
+test("someone runs into the road ahead, out of any crosswalk", () => {
+   const { sim, car } = hazardSim({ pedestrians: true });
+   for (let i = 0; i < 60; i++) sim.step();
+   const hazards = new Hazards(sim, { first: 0, random: () => 0.9 });
+   const started = hazards.update(car);
+   assert.equal(started.kind, "person");
+   const runner = sim.crowd.people.find((p) => p.jaywalking);
+   assert.ok(runner && runner.state == "crossing");
+   const ahead = -(runner.y - car.y);
+   assert.ok(ahead > 150 && ahead < 400, "about 2 seconds ahead: " + ahead);
+   assert.ok(!sim.world.markings.includes(runner.crossing), "no crosswalk there");
+});
+
+test("night and rain lessons ask for a longer following distance", () => {
+   const { world } = tJunction();
+   const car = studentCar(world, -200);
+   const lead = new Car(world.roadWidth / 4, -480, 30, 50, "DUMMY", 0, 1.5);
+   car.maxSpeed = 1.5; // same speed, about 2.5 s apart: fine at 2 s, too close at 3 s
+   const night = LESSONS.find((l) => l.id == "night");
+   const coach = new DrivingCoach(world, car, { followSeconds: night.followSeconds });
+   const dry = new DrivingCoach(world, car);
+   car.controls.forward = true;
+   for (let i = 0; i < 200; i++) {
+      lead.update([], []);
+      car.update([], []);
+      coach.update([lead]);
+      dry.update([lead]);
+   }
+   assert.equal(coach.mistakes.map((e) => e.rule).join(), "tailgating");
+   assert.equal(dry.mistakes.length, 0);
 });

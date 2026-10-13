@@ -71,6 +71,7 @@ class DrivingCoach {
       },
       full_stop: { severity: "good", title: "Full stop at the stop sign" },
       yielded_pedestrian: { severity: "good", title: "Stopped for a pedestrian" },
+      hazard_avoided: { severity: "good", title: "Handled the hazard safely" },
       waited_green: { severity: "good", title: "Waited for the green light" },
       signaled: { severity: "good", title: "Signaled the turn" },
       safe_gap: { severity: "good", title: "Kept a safe following distance" },
@@ -88,11 +89,13 @@ class DrivingCoach {
       return Math.abs(speed) * DrivingCoach.MPH_PER_UNIT;
    }
 
-   // options: speedLimit (mph), rules (ids to judge; default all)
-   constructor(world, car, { speedLimit = 30, rules = null } = {}) {
+   // options: speedLimit (mph), rules (ids to judge; default all),
+   // followSeconds (the minimum gap to the car ahead: 2, or more in bad weather)
+   constructor(world, car, { speedLimit = 30, rules = null, followSeconds = 2 } = {}) {
       this.world = world;
       this.car = car;
       this.speedLimit = speedLimit;
+      this.followSeconds = followSeconds;
       this.rules = rules ? new Set(rules) : null;
 
       this.events = [];
@@ -395,11 +398,11 @@ class DrivingCoach {
          return;
       }
       const seconds = gap / speed / 60;
-      if (seconds < 2) {
+      if (seconds < this.followSeconds) {
          this.counters.safeGap = 0;
          this.counters.tailgating++;
          if (this.counters.tailgating == 90) {
-            this.report("tailgating", { detail: seconds.toFixed(1) + " s behind" });
+            this.report("tailgating", { detail: seconds.toFixed(1) + " s behind, keep " + this.followSeconds + "+" });
          }
       } else {
          this.counters.tailgating = 0;

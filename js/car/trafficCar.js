@@ -68,6 +68,7 @@ class TrafficCar extends Car {
       this.blockedFrames = 0;
       this.ghostFrames = 0;
       this.playerWait = 0; // frames spent waiting on a stopped human driver
+      this.hazardBrake = 0; // frames of emergency stop (a Driving School hazard)
    }
 
    heading() {
@@ -227,6 +228,16 @@ class TrafficCar extends Car {
          }
       } else {
          this.blockedFrames = 0;
+      }
+
+      // emergency stop: brake lights on, as hard as a real car can (about
+      // 9 m/s²), so a driver keeping their distance has time to react
+      // (braking + rolling friction = 0.025 units/frame², i.e. 9 m/s²)
+      this.brakePower = this.hazardBrake > 0 ? 0.017 : this.acceleration;
+      this.friction = this.hazardBrake > 0 ? 0.008 : 0.05;
+      if (this.hazardBrake > 0) {
+         this.hazardBrake--;
+         targetSpeed = 0;
       }
 
       // a car can't ghost through a person who is waiting (that would be a

@@ -1,6 +1,8 @@
 // The driving school's lessons, from first drive to a full road test.
 // route: what kind of trip to pick (see DrivingSchool.routeScore)
 // rules: which rules the coach judges (null = all of them)
+// optional: pedestrians, hazards (surprise events), conditions ({ night, rain }),
+// followSeconds (minimum following distance, default 2)
 const LESSONS = [
    {
       id: "basics",
@@ -93,6 +95,40 @@ const LESSONS = [
       speedLimit: 25,
       pedestrians: true,
       rules: ["crash", "curb", "pedestrian_yield", "yielded_pedestrian", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
+      id: "hazards",
+      emoji: "⚠️",
+      title: "Hazards",
+      summary: "Expect the unexpected: sudden stops and people running out.",
+      learn: [
+         "Look far ahead and to the sides, not just at the car in front of you.",
+         "Brake lights ahead or someone near the road? Cover the brake so you're ready.",
+         "Most drivers need about 1.5 seconds to react. A safe following distance buys you that time.",
+      ],
+      route: "following",
+      traffic: 30,
+      speedLimit: 30,
+      pedestrians: true,
+      hazards: true,
+      rules: ["crash", "curb", "hazard_avoided", "tailgating", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
+      id: "night",
+      emoji: "🌙",
+      title: "Night & rain",
+      summary: "Less light, less grip: slow down and leave more room.",
+      learn: [
+         "At night you only see as far as your headlights. Drive slowly enough to stop within that distance.",
+         "Wet roads make stopping take longer. Brake earlier and more gently than usual.",
+         "Leave at least 3 seconds behind the car ahead, not 2.",
+      ],
+      route: "following",
+      traffic: 20,
+      speedLimit: 25,
+      conditions: { night: true, rain: true },
+      followSeconds: 3,
+      rules: ["crash", "curb", "tailgating", "safe_gap", "red_light", "ran_stop", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
    },
    {
       id: "roadtest",
