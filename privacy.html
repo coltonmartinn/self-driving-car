@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Privacy · Self-Driving City</title>
+   <meta name="description" content="Self-Driving City collects no personal data: progress is stored only on the student's own device.">
+   <meta property="og:title" content="Self-Driving City: learn to drive on real streets">
+   <meta property="og:description" content="Free driver's-ed practice: lessons graded like a road test, permit quiz, practice log, and an AI that teaches itself to drive.">
+   <meta property="og:image" content="https://coltonmartinn.github.io/self-driving-car/docs/screenshots/driving-school.png">
+   <meta property="og:type" content="website">
+   <meta name="twitter:card" content="summary_large_image">
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+   <link rel="stylesheet" href="styles.css">
+   <link rel="manifest" href="manifest.webmanifest">
+   <meta name="theme-color" content="#2457f5">
+   <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+   <script src="js/pwa.js" defer></script>
+</head>
+<body class="quiz-page">
+   <header class="topbar">
+      <a class="brand" href="index.html"><span class="logo"><span>🚗</span></span>Self-Driving City</a>
+      <nav>
+         <a href="drive.html">🚦 Driving School</a>
+         <a href="quiz.html">📝 Permit quiz</a>
+         <a href="log.html">🗒️ Practice log</a>
+         <a href="lab.html">🧠 AI Lab</a>
+         <button class="install-btn" data-install hidden>⬇️ Install app</button>
+      </nav>
+   </header>
+
+   <main class="quiz-main">
+      <article class="card quiz-card prose">
+         <span class="eyebrow">🔒 Privacy</span>
+         <h1>Your data stays on your device</h1>
+         <p class="lead-text">
+            Self-Driving City has no accounts, no tracking, and no ads. Nothing a student does is sent to us.
+         </p>
+
+         <h2>What is stored, and where</h2>
+         <p>
+            Lesson results, drive history, quiz scores, the practice log, and the name typed on the certificate are
+            saved in the browser's own storage on the device being used. They never leave that device unless the
+            student chooses to share them. Clearing the browser's site data erases them.
+         </p>
+
+         <h2>Sharing a progress report</h2>
+         <p>
+            The <b>Copy link</b> button puts the student's report inside the link itself. Whoever the student sends
+            it to can see that report. The link isn't stored on a server, and nobody else can find it.
+            The class view keeps pasted links in the teacher's own browser only.
+         </p>
+
+         <h2>What does go over the internet</h2>
+         <ul>
+            <li><b>The app's files</b> come from GitHub Pages, which hosts the site.</li>
+            <li><b>Fonts</b> come from Google Fonts.</li>
+            <li>
+               <b>Searching for a town</b> sends what you type to free map services built on OpenStreetMap data:
+               Nominatim (or Photon by Komoot, as a backup) to find the place, then one of the public Overpass servers
+               (overpass-api.de and its mirrors) to download its streets. The five built-in cities need no search.
+            </li>
+         </ul>
+         <p>These services see a request from your device, like any website does, and have their own privacy policies.</p>
+
+         <h2>For schools</h2>
+         <p>
+            Because no student information is collected or stored by us, there are no student records to request,
+            correct, or delete on our side. Teachers who collect report links decide how to keep them.
+         </p>
+
+         <p class="cert-note">
+            The source code is open (MIT license) on
+            <a href="https://github.com/coltonmartinn/self-driving-car">GitHub</a>, so anyone can check these claims.
+         </p>
+      </article>
+   </main>
+</body>
+</html>

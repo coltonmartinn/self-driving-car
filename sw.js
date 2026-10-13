@@ -2,7 +2,7 @@
 // Everything the pages need is saved on install; after that, pages load
 // from the saved copy at once and quietly refresh it in the background
 // (tests/pwa.test.js checks that this list covers every page's files).
-const CACHE = "self-driving-city-v5";
+const CACHE = "self-driving-city-v6";
 
 const APP_FILES = [
    "./",
@@ -13,6 +13,7 @@ const APP_FILES = [
    "quiz.html",
    "class.html",
    "log.html",
+   "privacy.html",
    "styles.css",
    "manifest.webmanifest",
    "icons/icon-192.png",

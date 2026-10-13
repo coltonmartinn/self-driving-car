@@ -1761,6 +1761,27 @@ button.badge {
    background: var(--good);
 }
 
+/* Long-form text pages (privacy) */
+.prose h1 {
+   font-size: clamp(26px, 4vw, 36px);
+   margin: 14px 0 8px;
+}
+
+.prose h2 {
+   font-size: 18px;
+   margin: 24px 0 6px;
+}
+
+.prose p,
+.prose li {
+   line-height: 1.6;
+}
+
+.lead-text {
+   font-size: 18px;
+   color: var(--muted);
+}
+
 /* Practice log */
 .log-title {
    font-size: clamp(24px, 4vw, 32px);
