@@ -1775,6 +1775,10 @@ button.badge {
    gap: 16px;
 }
 
+.class-main > * {
+   min-width: 0; /* let wide tables scroll instead of widening the page */
+}
+
 .class-main textarea {
    width: 100%;
    min-height: 120px;
@@ -1857,6 +1861,11 @@ button.badge {
    min-height: 30px;
    padding: 2px 8px;
    text-align: center;
+   border: 1px solid var(--border);
+   border-radius: 10px;
+   background: var(--surface);
+   color: var(--text);
+   font: 700 15px var(--font);
 }
 
 .progress-bar {
