@@ -42,7 +42,13 @@ Seven lessons, from your first drive to a final road test, in five real cities, 
 
 Mistakes are *minor* (−3), *major* (−10) or *critical* (fails the drive), and each comes with a tip written for new drivers. The coach is plain logic with no drawing, so all of it is unit-tested in Node.
 
-**For parents and teachers.** A progress report shows lessons passed, practice time, recent drives, and the mistakes that keep coming up, each with a tip. It prints cleanly, and a student can send it as a link. The whole report is encoded in the link, so it needs no accounts or server. Passing the road test unlocks a printable practice certificate.
+**For parents and teachers.** These need no accounts and no server:
+
+- **Progress report.** Lessons passed, practice time, recent drives, and the mistakes that keep coming up, each with a tip. It prints cleanly, and a student can send it as a link that carries the whole report.
+- **Class view** ([`class.html`](class.html)). A teacher pastes the students' links to see the class in one table, plus the mistakes most students make, to teach next. Nothing is uploaded.
+- **Permit test practice** ([`quiz.html`](quiz.html)). 40 rules-of-the-road questions (signs, signals, right-of-way, lane markings, safe driving), each with an explanation.
+- **Certificate.** Passing the road test unlocks a printable practice certificate.
+- **Installable app.** It installs to a phone, tablet or Chromebook home screen and works offline, thanks to a service worker that saves every page and city.
 
 **Built for learning to drive.** Directions are turn-by-turn and reroute after a missed turn. The view turns with the car, so ahead is always up. US-style signs, speed limits in mph, keyboard or on-screen pedals. Progress is saved per lesson.
 
@@ -79,7 +85,7 @@ Open http://localhost:8080. The local server proxies map downloads, which makes 
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | 63 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, and the driving coach |
+| `npm test` | 71 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, the driving coach, progress reports, the quiz, and offline caching |
 | `npm run typecheck` | TypeScript checks the plain JavaScript (`checkJs`), with no build step |
 | `npm run lint` | ESLint |
 | `node scripts/train.js --generations 150 --trips-per-gen 3 --out brain.json` | Train a brain headless (see [experiments](docs/experiments/README.md)) |
@@ -108,6 +114,8 @@ flowchart LR
 | Piece | Where | Notes |
 | --- | --- | --- |
 | Driving School | `drive.html`, `js/school/` | Coach, lessons, sign and crosswalk placement, route picking, turn-by-turn directions, touch controls |
+| Reports and quiz | `js/school/progress.js`, `js/school/quiz.js`, `class.html`, `quiz.html` | Drive history summaries, share links encoded in the URL, class roll-ups, permit questions |
+| Offline app | `sw.js`, `manifest.webmanifest`, `js/pwa.js` | Service worker that saves every page and city; a test checks that every file the pages load is on its list |
 | Pedestrians | `js/pedestrians.js` | People who wait for a gap at crosswalks and walk across; traffic and the coach both respect them |
 | Simulation | `js/simulation.js` | One frame of cars and traffic with no drawing, shared by the browser pages and the headless trainer |
 | Geometry | `js/primitives`, `js/math/utils.js` | Segments, polygons, a crossing-number point-in-polygon test, polygon union for road outlines |
@@ -132,7 +140,10 @@ flowchart LR
 
 ```
 index.html           landing page
-drive.html           Driving School
+drive.html           Driving School (lessons, progress report, certificate)
+quiz.html            permit test practice
+class.html           class view for teachers
+sw.js                offline support (service worker)
 lab.html             AI Lab: training, GPS trips, network view
 editor.html          City Builder
 server.js            local server and map proxy

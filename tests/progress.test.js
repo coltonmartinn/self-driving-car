@@ -48,6 +48,9 @@ test("a share link round-trips the history", () => {
    const back = Progress.decode(code);
    assert.equal(back.name, "Alex Rivera");
    assert.equal(JSON.stringify(back.history), JSON.stringify(history));
+   assert.equal(back.quiz, null);
+   const withQuiz = Progress.decode(Progress.encode("Sam", history, { best: 85, passedFull: true, tests: 3 }));
+   assert.equal(JSON.stringify(withQuiz.quiz), JSON.stringify({ best: 85, passedFull: true }));
 });
 
 test("history is capped", () => {
@@ -57,4 +60,23 @@ test("history is capped", () => {
    }
    assert.equal(h.length, Progress.MAX_HISTORY);
    assert.equal(h[0].date, 5 * 60000, "oldest drives drop off first");
+});
+
+test("a class view combines several students' links", () => {
+   const alex = sampleHistory();
+   let sam = [];
+   sam = Progress.add(sam, Progress.record(lesson("basics"), summary(97, ["speeding"]), { ended: "arrived", city: "X", date: 60000 * 28000100 }));
+   const links = [
+      "https://example.com/drive.html#report=" + Progress.encode("Sam Lee", sam, { best: 90, passedFull: true }),
+      "  " + Progress.encode("Alex Rivera", alex) + "  ",
+   ];
+   const students = links.map((l) => Progress.fromLink(l));
+   assert.equal(Progress.fromLink("not a link"), null);
+   const c = Progress.classSummary(students, LESSONS, DrivingCoach.RULES);
+   assert.equal(c.rows.map((r) => r.name).join(), "Alex Rivera,Sam Lee", "sorted by name");
+   assert.equal(c.rows[1].quizBest, 90);
+   assert.equal(c.rows[0].focus.rule, "rolling_stop");
+   const speeding = c.focus.find((f) => f.rule == "speeding");
+   assert.equal(speeding.students, 2, "both students speed");
+   assert.equal(c.focus[0].rule, "speeding");
 });

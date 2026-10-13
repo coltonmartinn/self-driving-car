@@ -9,14 +9,21 @@
    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
    <link rel="stylesheet" href="styles.css">
+   <link rel="manifest" href="manifest.webmanifest">
+   <meta name="theme-color" content="#2457f5">
+   <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+   <script src="js/pwa.js" defer></script>
 </head>
 <body class="app school">
    <header class="topbar">
       <a class="brand" href="index.html"><span class="logo"><span>🚗</span></span>Self-Driving City</a>
       <nav>
          <a href="drive.html" aria-current="page">🚦 Driving School</a>
+         <a href="quiz.html">📝 Permit quiz</a>
          <a href="lab.html">🧠 AI Lab</a>
          <a href="editor.html">🏗️ City Builder</a>
+         <button class="install-btn" data-install hidden>⬇️ Install app</button>
       </nav>
    </header>
 
@@ -188,6 +195,7 @@
                <p class="cert-note" id="progNote"></p>
                <div class="card-actions no-print">
                   <button class="ghost" onclick="closeProgress()">Close</button>
+                  <a class="button ghost" href="class.html">👩‍🏫 Class view</a>
                   <button id="progShareBtn" onclick="shareProgress()">🔗 Copy link for a parent or teacher</button>
                   <button class="primary" onclick="window.print()">🖨️ Print</button>
                </div>
@@ -318,6 +326,10 @@
             } catch (e) {
                // a broken link: fall through to the lessons
             }
+         }
+         if (location.hash == "#progress") {
+            showProgress();
+            return;
          }
          const lessonId = params.get("lesson");
          const fromLink = LESSONS.find((l) => l.id == lessonId);
@@ -782,11 +794,20 @@
          }
       }
 
-      let sharedReport = null; // { name, history } when opened from a link
+      function getQuiz() {
+         try {
+            return JSON.parse(getSaved("school-quiz"));
+         } catch (e) {
+            return null;
+         }
+      }
+
+      let sharedReport = null; // { name, history, quiz } when opened from a link
 
       function showProgress(shared = null) {
          sharedReport = shared;
          const history = shared ? shared.history : getHistory();
+         const quiz = shared ? shared.quiz : getQuiz();
          const name = shared ? shared.name : getSaved("school-name") || "";
          const r = Progress.summarize(history, LESSONS, DrivingCoach.RULES);
          progName.textContent = name || "Student driver";
@@ -797,6 +818,7 @@
             [r.drives, "drives"],
             [r.minutes + " min", "practice"],
             [r.roadTestPassed ? "✓ Passed" : "Not yet", "road test"],
+            [quiz && quiz.best != null ? quiz.best + "%" : "–", "permit quiz best"],
          ].map(([v, label]) => "<div class='stat'><b>" + v + "</b><span>" + label + "</span></div>").join("");
 
          progLessons.innerHTML = "<tr><th>Lesson</th><th>Tries</th><th>Best</th><th></th></tr>" + r.lessons.map((l) =>
@@ -838,7 +860,7 @@
       function shareProgress() {
          const name = getSaved("school-name") || prompt("Your name, for the report:") || "";
          if (name) setSaved("school-name", name);
-         const url = location.origin + location.pathname + "#report=" + Progress.encode(name, getHistory());
+         const url = location.origin + location.pathname + "#report=" + Progress.encode(name, getHistory(), getQuiz());
          if (navigator.clipboard) {
             navigator.clipboard.writeText(url).then(
                () => { progShareBtn.textContent = "✓ Link copied"; },

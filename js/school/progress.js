@@ -65,12 +65,54 @@ const Progress = {
       };
    },
 
-   // Compact, URL-safe encoding, for a link a student can send
-   encode(name, history) {
+   // A whole class at once, from the students' shared reports.
+   // students: [{ name, history, quiz }]
+   classSummary(students, lessons, rules) {
+      const rows = students.map((s) => {
+         const r = Progress.summarize(s.history, lessons, rules);
+         const last = s.history.length > 0 ? Math.max(...s.history.map((d) => d.date)) : null;
+         return {
+            name: s.name || "Unnamed student",
+            lessonsPassed: r.lessonsPassed,
+            lessonCount: r.lessonCount,
+            roadTestPassed: r.roadTestPassed,
+            quizBest: s.quiz ? s.quiz.best : null,
+            drives: r.drives,
+            minutes: r.minutes,
+            lastActive: last,
+            focus: r.focus[0] || null,
+         };
+      });
+      rows.sort((a, b) => a.name.localeCompare(b.name));
+
+      // mistakes across the class: how many students make each one
+      const studentsWith = new Map();
+      for (const s of students) {
+         for (const rule of new Set(s.history.flatMap((d) => d.mistakes))) {
+            studentsWith.set(rule, (studentsWith.get(rule) || 0) + 1);
+         }
+      }
+      const focus = [...studentsWith]
+         .filter(([rule]) => rules[rule])
+         .map(([rule, count]) => ({ rule, students: count, ...rules[rule] }))
+         .sort((a, b) => b.students - a.students)
+         .slice(0, 5);
+      return { rows, focus };
+   },
+
+   // Pulls the report data out of a pasted share link (or the bare code)
+   fromLink(text) {
+      const match = text.trim().match(/#report=([A-Za-z0-9_-]+)/) || text.trim().match(/^([A-Za-z0-9_-]{20,})$/);
+      return match ? Progress.decode(match[1]) : null;
+   },
+
+   // Compact, URL-safe encoding, for a link a student can send.
+   // quiz: the permit quiz results ({ best, passedFull }), if any
+   encode(name, history, quiz = null) {
       const rows = history.slice(-60).map((d) => [
          d.lesson, d.city, Math.round(d.date / 60000), d.ended[0], d.score, d.grade, d.passed ? 1 : 0, d.minutes, d.mistakes,
       ]);
-      const json = JSON.stringify({ v: 1, n: name, h: rows });
+      const json = JSON.stringify({ v: 1, n: name, h: rows, q: quiz ? [quiz.best, quiz.passedFull ? 1 : 0] : null });
       const bytes = new TextEncoder().encode(json);
       let binary = "";
       for (const b of bytes) binary += String.fromCharCode(b);
@@ -84,6 +126,7 @@ const Progress = {
       const ended = { a: "arrived", c: "crash", q: "quit" };
       return {
          name: data.n || "",
+         quiz: data.q ? { best: data.q[0], passedFull: data.q[1] == 1 } : null,
          history: data.h.map(([lesson, city, minute, end, score, grade, passed, minutes, mistakes]) => ({
             lesson, city, date: minute * 60000, ended: ended[end], score, grade, passed: passed == 1, minutes, mistakes,
          })),

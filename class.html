@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Class View · Self-Driving City</title>
+   <meta name="description" content="See a whole class's Driving School progress from the report links students send.">
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+   <link rel="stylesheet" href="styles.css">
+   <link rel="manifest" href="manifest.webmanifest">
+   <meta name="theme-color" content="#2457f5">
+   <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+   <script src="js/pwa.js" defer></script>
+</head>
+<body class="quiz-page">
+   <header class="topbar">
+      <a class="brand" href="index.html"><span class="logo"><span>🚗</span></span>Self-Driving City</a>
+      <nav>
+         <a href="drive.html">🚦 Driving School</a>
+         <a href="quiz.html">📝 Permit quiz</a>
+         <a href="class.html" aria-current="page">👩‍🏫 Class view</a>
+         <a href="lab.html">🧠 AI Lab</a>
+         <button class="install-btn" data-install hidden>⬇️ Install app</button>
+      </nav>
+   </header>
+
+   <main class="class-main">
+      <section class="card quiz-card no-print">
+         <span class="eyebrow">👩‍🏫 For teachers and parents</span>
+         <h1>Your class at a glance</h1>
+         <p class="muted">
+            Ask each student to open <b>Driving School → 📋 Progress report → Copy link</b> and send it to you.
+            Paste the links below, one per line. Everything stays in this browser: nothing is uploaded.
+         </p>
+         <textarea id="links" rows="6" placeholder="https://…/drive.html#report=…&#10;https://…/drive.html#report=…" spellcheck="false"></textarea>
+         <p class="status" id="loadStatus"></p>
+         <div class="card-actions" style="justify-content: flex-start">
+            <button class="primary" onclick="build()">Show class</button>
+            <button class="ghost" onclick="clearAll()">Clear</button>
+            <button class="ghost" onclick="loadExample()">Try with example students</button>
+         </div>
+      </section>
+
+      <section class="card quiz-card" id="classReport" hidden>
+         <div class="report-top">
+            <div>
+               <p class="cert-kicker">Driving School class report</p>
+               <h2 id="classTitle"></h2>
+               <p class="muted" id="classDate"></p>
+            </div>
+            <button class="no-print" onclick="window.print()">🖨️ Print</button>
+         </div>
+         <div class="stat-row" id="classStats"></div>
+         <p class="report-section">Teach this next: the most common mistakes</p>
+         <ul class="report-list" id="classFocus"></ul>
+         <p class="report-section">Students</p>
+         <div class="table-scroll">
+            <table class="lesson-table" id="classTable"></table>
+         </div>
+         <p class="cert-note">
+            Reports come from each student's own device, so treat them as a practice log rather than an official
+            record. Simulator practice doesn't replace supervised driving.
+         </p>
+      </section>
+   </main>
+
+   <script src="js/school/coach.js"></script>
+   <script src="js/school/lessons.js"></script>
+   <script src="js/school/progress.js"></script>
+   <script>
+      try {
+         links.value = localStorage.getItem("class-links") || "";
+      } catch (e) {}
+      if (links.value.trim()) build();
+
+      function build() {
+         try {
+            localStorage.setItem("class-links", links.value);
+         } catch (e) {}
+         const lines = links.value.split(/\s+/).filter((l) => l.trim());
+         const students = [];
+         let bad = 0;
+         for (const line of lines) {
+            try {
+               const s = Progress.fromLink(line);
+               if (s) students.push(s);
+               else bad++;
+            } catch (e) {
+               bad++;
+            }
+         }
+         loadStatus.textContent = students.length + " student report" + (students.length == 1 ? "" : "s") + " loaded" +
+            (bad ? " · " + bad + " line" + (bad == 1 ? "" : "s") + " didn't look like a report link" : "");
+         if (students.length == 0) {
+            classReport.hidden = true;
+            return;
+         }
+         render(Progress.classSummary(students, LESSONS, DrivingCoach.RULES));
+      }
+
+      function render(c) {
+         const n = c.rows.length;
+         classTitle.textContent = n + " student" + (n == 1 ? "" : "s");
+         classDate.textContent = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+         const avg = (xs) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
+         const quizzes = c.rows.map((r) => r.quizBest).filter((q) => q != null);
+         classStats.innerHTML = [
+            [(c.rows.reduce((t, r) => t + r.lessonsPassed, 0) / n).toFixed(1) + "/" + LESSONS.length, "lessons passed (avg)"],
+            [c.rows.filter((r) => r.roadTestPassed).length + "/" + n, "passed road test"],
+            [quizzes.length ? avg(quizzes) + "%" : "–", "permit quiz (avg best)"],
+            [c.rows.reduce((t, r) => t + r.minutes, 0) + " min", "total practice"],
+         ].map(([v, label]) => "<div class='stat'><b>" + v + "</b><span>" + label + "</span></div>").join("");
+
+         classFocus.innerHTML = c.focus.length == 0
+            ? "<li>🌟 No repeat mistakes across the class yet.</li>"
+            : c.focus.map((f) =>
+               "<li><span>" + (f.severity == "critical" ? "❌" : f.severity == "major" ? "⛔" : "⚠️") + "</span><div><b>" +
+               esc(f.title) + "</b> · " + f.students + " of " + n + " students<span class='tip'>" + esc(f.tip) + "</span></div></li>").join("");
+
+         classTable.innerHTML =
+            "<tr><th>Student</th><th>Lessons</th><th>Road test</th><th>Quiz</th><th>Practice</th><th>Last active</th><th>Needs work on</th></tr>" +
+            c.rows.map((r) =>
+               "<tr><td><b>" + esc(r.name) + "</b></td>" +
+               "<td><div class='mini-bar'><div style='width:" + (r.lessonsPassed / r.lessonCount) * 100 + "%'></div></div>" +
+               r.lessonsPassed + "/" + r.lessonCount + "</td>" +
+               "<td>" + (r.roadTestPassed ? "<span class='badge good'>Passed</span>" : "–") + "</td>" +
+               "<td>" + (r.quizBest == null ? "–" : r.quizBest + "%") + "</td>" +
+               "<td>" + r.minutes + " min · " + r.drives + " drives</td>" +
+               "<td>" + (r.lastActive ? new Date(r.lastActive).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "–") + "</td>" +
+               "<td>" + (r.focus ? esc(r.focus.title) : "–") + "</td></tr>").join("");
+         classReport.hidden = false;
+      }
+
+      function clearAll() {
+         links.value = "";
+         loadStatus.textContent = "";
+         classReport.hidden = true;
+         try {
+            localStorage.removeItem("class-links");
+         } catch (e) {}
+      }
+
+      // Made-up students, so a teacher can see what the page does
+      function loadExample() {
+         const day = 86400000;
+         const now = Date.now();
+         const drive = (lesson, score, passed, mistakes, daysAgo) => ({
+            lesson, city: "Beverly Hills", date: now - daysAgo * day, ended: "arrived", score,
+            grade: score >= 90 ? "A" : "B", passed, minutes: 2, mistakes,
+         });
+         const examples = [
+            ["Jordan (example)", [drive("basics", 100, true, [], 6), drive("stops", 87, true, ["rolling_stop"], 5),
+               drive("lights", 100, true, [], 4), drive("signals", 91, true, ["no_signal", "speeding"], 2)], { best: 85, passedFull: true }],
+            ["Priya (example)", [drive("basics", 97, true, ["speeding"], 3), drive("stops", 70, false, ["rolling_stop", "rolling_stop", "speeding"], 2),
+               drive("stops", 94, true, ["speeding"], 1)], { best: 75, passedFull: false }],
+            ["Marcus (example)", [drive("basics", 100, true, [], 9), drive("stops", 100, true, [], 8), drive("lights", 97, true, ["speeding"], 8),
+               drive("signals", 100, true, [], 7), drive("following", 94, true, ["tailgating"], 6), drive("pedestrians", 100, true, [], 5),
+               drive("roadtest", 91, true, ["no_signal", "speeding"], 3)], { best: 95, passedFull: true }],
+         ];
+         links.value = examples.map(([name, history, quiz]) =>
+            location.origin + location.pathname.replace("class.html", "drive.html") + "#report=" + Progress.encode(name, history, quiz)
+         ).join("\n");
+         build();
+      }
+
+      function esc(text) {
+         const div = document.createElement("div");
+         div.textContent = text;
+         return div.innerHTML;
+      }
+   </script>
+</body>
+</html>

@@ -8,14 +8,21 @@
    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
    <link rel="stylesheet" href="styles.css">
+   <link rel="manifest" href="manifest.webmanifest">
+   <meta name="theme-color" content="#2457f5">
+   <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+   <script src="js/pwa.js" defer></script>
 </head>
 <body class="editor">
    <header class="topbar">
       <a class="brand" href="index.html"><span class="logo"><span>🚗</span></span>Self-Driving City</a>
       <nav>
          <a href="drive.html">🚦 Driving School</a>
+         <a href="quiz.html">📝 Permit quiz</a>
          <a href="lab.html">🧠 AI Lab</a>
          <a href="editor.html" aria-current="page">🏗️ City Builder</a>
+         <button class="install-btn" data-install hidden>⬇️ Install app</button>
       </nav>
    </header>
    <canvas id="myCanvas"></canvas>

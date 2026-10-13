@@ -1,0 +1,21 @@
+{
+   "name": "Self-Driving City: Driving School",
+   "short_name": "Driving School",
+   "description": "Practice the rules of the road on real streets, with a coach that grades every drive like a road test.",
+   "start_url": "drive.html",
+   "scope": "./",
+   "display": "standalone",
+   "background_color": "#f5f6fa",
+   "theme_color": "#2457f5",
+   "categories": ["education", "games"],
+   "icons": [
+      { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+      { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+      { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+   ],
+   "shortcuts": [
+      { "name": "Driving lessons", "url": "drive.html" },
+      { "name": "Permit test practice", "url": "quiz.html" },
+      { "name": "Progress report", "url": "drive.html#progress" }
+   ]
+}
