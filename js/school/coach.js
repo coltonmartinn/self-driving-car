@@ -72,6 +72,19 @@ class DrivingCoach {
       full_stop: { severity: "good", title: "Full stop at the stop sign" },
       yielded_pedestrian: { severity: "good", title: "Stopped for a pedestrian" },
       hazard_avoided: { severity: "good", title: "Handled the hazard safely" },
+      parked_well: { severity: "good", title: "Pulled over neatly" },
+      missed_spot: {
+         severity: "major", title: "Stopped outside the spot",
+         tip: "Aim to stop with the whole car inside the marked space, close to the curb.",
+      },
+      crooked_park: {
+         severity: "minor", title: "Parked at an angle",
+         tip: "Straighten the wheel as you come to the curb, so the car ends up parallel to it.",
+      },
+      pullover_signal: {
+         severity: "minor", title: "Pulled over without signaling",
+         tip: "Signal right before moving to the curb, so drivers behind know you're slowing down.",
+      },
       waited_green: { severity: "good", title: "Waited for the green light" },
       signaled: { severity: "good", title: "Signaled the turn" },
       safe_gap: { severity: "good", title: "Kept a safe following distance" },
@@ -507,6 +520,29 @@ class DrivingCoach {
       if (car.controls.cancelSignal) {
          car.controls.cancelSignal(); // like a real car, the signal clicks off
       }
+   }
+
+   // Judges a stop at the curb, in the marked parking space `spot`
+   judgePullOver(spot) {
+      const car = this.car;
+      const dir = spot.directionVector;
+      const rel = subtract(car, spot.center);
+      const along = dot(rel, dir);
+      const lateral = dot(rel, perpendicular(dir));
+      const inside = Math.abs(along) <= spot.height / 2 - car.height / 2 + 10 && Math.abs(lateral) <= spot.width / 2 + 6;
+      const heading = this.heading();
+      const off = Math.abs(Math.atan2(heading.x * dir.y - heading.y * dir.x, dot(heading, dir))) * (180 / Math.PI);
+      const events = [];
+      const signaled = this.lastSignal.side == "right" && this.frame - this.lastSignal.frame < 600;
+      if (!signaled) events.push(this.report("pullover_signal"));
+      if (!inside) {
+         events.push(this.report("missed_spot"));
+      } else if (off > 12) {
+         events.push(this.report("crooked_park", { detail: Math.round(off) + "° off" }));
+      } else {
+         events.push(this.report("parked_well"));
+      }
+      return events.filter(Boolean);
    }
 
    // A summary for the report card

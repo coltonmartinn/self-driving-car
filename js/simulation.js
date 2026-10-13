@@ -13,6 +13,7 @@ class Simulation {
       generationFrames: 60 * 90, // a generation lasts at most 90 s
       gps: true, // false = cars get no GPS hints (for experiments)
       trafficSpeed: null, // [min, max] cruising speed for traffic (default: TrafficCar's own)
+      autoArrive: true, // false: reaching the end of the route doesn't end the drive (the page decides)
       pedestrians: false, // people walking across crosswalks (needs js/pedestrians.js)
       playerControls: null, // manual mode: a human's PlayerControls (else the keyboard)
       random: Math.random,
@@ -222,7 +223,7 @@ class Simulation {
       if (!this.manual && loc.distance > this.world.roadWidth * 1.2) {
          car.damaged = true; // wrong turn
       }
-      if (loc.progress >= route.length - 40) {
+      if (this.options.autoArrive && loc.progress >= route.length - 40) {
          car.arrived = true;
          car.damaged = true; // done driving
          car.fitness = route.length + (this.options.generationFrames - this.frame); // faster is better

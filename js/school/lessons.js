@@ -97,6 +97,22 @@ const LESSONS = [
       rules: ["crash", "curb", "pedestrian_yield", "yielded_pedestrian", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
    },
    {
+      id: "pullover",
+      emoji: "🅿️",
+      title: "Pulling over",
+      summary: "Signal, slow down, and stop neatly at the curb.",
+      learn: [
+         "Signal right well before you pull over (press E), and check behind you.",
+         "Slow down gradually and ease toward the curb inside the marked space.",
+         "Stop parallel to the curb, close to it but without touching it.",
+      ],
+      route: "basics",
+      traffic: 8,
+      speedLimit: 25,
+      pullover: true,
+      rules: ["crash", "curb", "parked_well", "missed_spot", "crooked_park", "pullover_signal", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
       id: "hazards",
       emoji: "⚠️",
       title: "Hazards",

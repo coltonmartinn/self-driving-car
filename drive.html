@@ -273,6 +273,8 @@
       let endReason = null;
       let offRouteFrames = 0;
       let hazards = null; // surprise events, in the Hazards lesson
+      let parkingSpot = null; // where to pull over, in the Pulling over lesson
+      let stillFrames = 0;
       const lightCanvas = document.createElement("canvas"); // night: where light falls
       const lightCtx = lightCanvas.getContext("2d");
       const raindrops = [];
@@ -505,6 +507,7 @@
          const pace = lesson.id == "following" ? [0.6, 0.75] : [0.8, 1];
          sim.options.trafficCount = lesson.traffic;
          sim.options.pedestrians = !!lesson.pedestrians;
+         sim.options.autoArrive = !lesson.pullover;
          sim.options.trafficSpeed = [limit * pace[0], limit * pace[1]];
 
          if (sameTrip && tripDestination) {
@@ -536,6 +539,9 @@
             speedLimit: lesson.speedLimit, rules: lesson.rules, followSeconds: lesson.followSeconds || 2,
          });
          hazards = lesson.hazards ? new Hazards(sim) : null;
+         parkingSpot = lesson.pullover ? makeParkingSpot(sim.trip.route) : null;
+         stillFrames = 0;
+         if (parkingSpot) world.destination = parkingSpot;
          turns = DrivingSchool.turnsOf(sim.trip.route, DrivingSchool.junctionsOf(world));
          camera.x = car.x;
          camera.y = car.y;
@@ -598,6 +604,7 @@
                for (const event of coach.update(others)) {
                   toast(event);
                }
+               if (parkingSpot) checkPullOver();
                if (endTimer < 0 && (car.arrived || coach.finished)) {
                   endTimer = 70; // a moment to see what happened
                }
@@ -621,6 +628,26 @@
             draw();
          }
          requestAnimationFrame(animate);
+      }
+
+      // A marked space by the curb, a little before the end of the route
+      function makeParkingSpot(route) {
+         const at = Math.max(route.length * 0.6, route.length - 120);
+         const dir = normalize(subtract(route.pointAt(at + 10), route.pointAt(at - 10)));
+         const center = add(route.pointAt(at), scale(perpendicular(dir), world.roadWidth / 2 - 24));
+         return new Parking(center, dir, 44, 90);
+      }
+
+      // Pulled up and stopped near the space for a second: judge the stop
+      function checkPullOver() {
+         if (car.arrived || car.damaged) return;
+         const near = distance(car, parkingSpot.center) < 160;
+         stillFrames = near && Math.abs(car.speed) < 0.02 ? stillFrames + 1 : 0;
+         if (stillFrames == 60) {
+            for (const event of coach.judgePullOver(parkingSpot)) toast(event);
+            car.arrived = true;
+            car.damaged = true; // parked: the drive is over
+         }
       }
 
       // Missed a turn? Not a safety mistake: plan a new route, like a GPS
@@ -797,7 +824,9 @@
          const step = DrivingSchool.nextInstruction(route, car.fitness, turns);
          const titles = { left: "Turn left", right: "Turn right", uturn: "Make a U-turn", arrive: "Arrive" };
          const far = step.kind != "arrive" && step.distance > 2500;
-         navTitle.textContent = car.arrived ? "You've arrived" : far ? "Continue straight" : titles[step.kind];
+         const pullOver = parkingSpot && step.kind == "arrive";
+         navTitle.textContent = car.arrived ? "You've arrived" : far ? "Continue straight"
+            : pullOver ? "Pull over at the P" : titles[step.kind];
          navDistance.textContent = car.arrived ? "Nice driving!" : (far ? "for " : "in ") + formatFeet(step.distance);
          const arrow = car.arrived ? "arrive" : far ? "straight" : step.kind;
          if (navArrow.dataset.kind != arrow) {

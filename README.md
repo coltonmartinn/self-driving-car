@@ -19,7 +19,7 @@ Plain JavaScript and HTML canvas, with **no libraries and no build step**. It st
 | --- | --- |
 | ![Lesson picker](docs/screenshots/lessons.png) | ![Report card](docs/screenshots/report-card.png) |
 
-Nine lessons, from your first drive to a final road test, in five real cities, your own town (search any place), or a city you built yourself:
+Ten lessons, from your first drive to a final road test, in five real cities, your own town (search any place), or a city you built yourself:
 
 | Lesson | What the coach checks |
 | --- | --- |
@@ -29,6 +29,7 @@ Nine lessons, from your first drive to a final road test, in five real cities, y
 | ↪️ Turn signals | Signaling before each turn, and in the right direction |
 | ↔️ Following distance | The 2-second rule, measured from your speed and the gap to the car ahead |
 | 🚶 Crosswalks | Stopping for people on foot, and waiting until they've crossed |
+| 🅿️ Pulling over | Signaling, then stopping inside a marked space at the curb, parallel to it |
 | ⚠️ Hazards | Surprises with no warning: the car ahead brakes hard, someone runs into the road. Measures your reaction time |
 | 🌙 Night & rain | Only headlights and streetlights to see by, wet brakes, and a 3-second following distance |
 | 🎓 Road test | Everything at once. Score 80+ with no critical mistakes to pass |
@@ -87,7 +88,7 @@ Open http://localhost:8080. The local server proxies map downloads, which makes 
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | 74 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, the driving coach, progress reports, the quiz, and offline caching |
+| `npm test` | 75 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, the driving coach, progress reports, the quiz, and offline caching |
 | `npm run typecheck` | TypeScript checks the plain JavaScript (`checkJs`), with no build step |
 | `npm run lint` | ESLint |
 | `node scripts/train.js --generations 150 --trips-per-gen 3 --out brain.json` | Train a brain headless (see [experiments](docs/experiments/README.md)) |

@@ -6,7 +6,7 @@ const { loadApp } = require("./helpers/loadApp");
 
 const {
    Point, Segment, Graph, World, Car, Light, Stop, Route, Simulation, Crossing,
-   WorldGenerator, DrivingSchool, DrivingCoach, LESSONS, distance, Pedestrian, Crowd, TrafficCar, TrafficNetwork, Hazards,
+   WorldGenerator, DrivingSchool, DrivingCoach, LESSONS, distance, Pedestrian, Crowd, TrafficCar, TrafficNetwork, Hazards, Parking, perpendicular, add, scale,
 } = loadApp({ seed: 3 });
 
 // A road going north from (0, 0), with a road to the east at y = -1500
@@ -473,4 +473,28 @@ test("night and rain lessons ask for a longer following distance", () => {
    }
    assert.equal(coach.mistakes.map((e) => e.rule).join(), "tailgating");
    assert.equal(dry.mistakes.length, 0);
+});
+
+// ---------- pulling over ----------
+
+test("pulling over is judged on signaling, position and angle", () => {
+   const { world } = tJunction();
+   const dir = new Point(0, -1);
+   const spot = new Parking(add(new Point(0, -700), scale(perpendicular(dir), world.roadWidth / 2 - 24)), dir, 44, 90);
+   const park = (dx, dy, angle, signal) => {
+      const car = studentCar(world, spot.center.y + dy, spot.center.x + dx);
+      car.angle = angle;
+      const coach = new DrivingCoach(world, car);
+      if (signal) {
+         car.controls.signal = "right";
+         coach.update();
+         car.controls.signal = null;
+      }
+      return coach.judgePullOver(spot).map((e) => e.rule).join();
+   };
+   assert.equal(park(0, 0, 0, true), "parked_well");
+   assert.equal(park(0, 0, 0, false), "pullover_signal,parked_well");
+   assert.equal(park(0, 0, 0.4, true), "crooked_park");
+   assert.equal(park(0, 200, 0, true), "missed_spot", "stopped short");
+   assert.equal(park(-60, 0, 0, true), "missed_spot", "too far from the curb");
 });
