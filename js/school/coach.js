@@ -109,6 +109,11 @@ class DrivingCoach {
          severity: "major", title: "Didn't pull over for the ambulance",
          tip: "When you hear a siren or see flashing lights, slow down, pull to the right edge of the road and stop until it has passed.",
       },
+      phone_use: {
+         severity: "major", title: "Looked at your phone to reply",
+         tip: "Texting while driving is against the law for new drivers in almost every state. If it can't wait, park first.",
+      },
+      ignored_phone: { severity: "good", title: "Left your phone alone" },
       yielded_emergency: { severity: "good", title: "Pulled over for the ambulance" },
       clean_pass: { severity: "good", title: "Passed safely" },
       checked_blind_spot: { severity: "good", title: "Checked your blind spot" },

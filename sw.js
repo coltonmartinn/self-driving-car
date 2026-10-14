@@ -2,7 +2,7 @@
 // Everything the pages need is saved on install; after that, pages load
 // from the saved copy at once and quietly refresh it in the background
 // (tests/pwa.test.js checks that this list covers every page's files).
-const CACHE = "self-driving-city-v9";
+const CACHE = "self-driving-city-v10";
 
 const APP_FILES = [
    "./",
@@ -76,6 +76,7 @@ const APP_FILES = [
    "js/school/hazards.js",
    "js/school/lessons.js",
    "js/school/playerControls.js",
+   "js/school/phone.js",
    "js/school/practiceLog.js",
    "js/school/progress.js",
    "js/school/quiz.js",

@@ -51,3 +51,7 @@ test("the demo driver pulls over for an ambulance, coming towards it or from beh
    const behind = clean("emergency", "san-francisco", 1); // one-way streets: it comes up from behind
    assert.ok(behind.coach.events.some((e) => e.rule == "yielded_emergency"));
 });
+
+test("the demo driver leaves the phone alone", () => {
+   clean("phone", "beverly-hills", 1);
+});

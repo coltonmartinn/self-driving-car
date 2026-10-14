@@ -61,6 +61,22 @@
             </div>
 
             <div id="toasts" class="hud" aria-live="polite"></div>
+            <!-- a text arriving (the Phone down lesson) -->
+            <div id="phoneBanner" class="hud phone-banner" hidden role="status">
+               <span class="app-icon">💬</span>
+               <div><b id="phoneFrom"></b><span id="phoneText"></span></div>
+               <button id="phoneReply" onclick="replyToText()">Reply</button>
+            </div>
+            <!-- what you see while you look at your phone: not the road -->
+            <div id="phoneScreen" class="phone-screen" hidden>
+               <div class="phone">
+                  <div class="phone-head"><b id="phoneScreenFrom"></b><span>now</span></div>
+                  <div class="bubble them" id="phoneScreenText"></div>
+                  <div class="bubble me" id="phoneTyping">ok i'm dr</div>
+               </div>
+               <p class="phone-warning">👀 Your eyes are on your phone.<br><b id="phoneSpeed"></b></p>
+               <div class="phone-timer"><div id="phoneTimer"></div></div>
+            </div>
             <!-- what the demo driver is thinking, like subtitles -->
             <div id="caption" class="hud" aria-live="polite" hidden><span>🗣️</span><div><b id="captionTitle"></b><small id="captionTip"></small></div></div>
 
@@ -291,6 +307,7 @@
    <script src="js/school/progress.js"></script>
    <script src="js/school/replay.js"></script>
    <script src="js/school/autopilot.js"></script>
+   <script src="js/school/phone.js"></script>
    <script>
       const ctx = carCanvas.getContext("2d");
       const controls = new PlayerControls();
@@ -322,6 +339,7 @@
       let nextAmbulance = Infinity; // coach frame when the next ambulance comes
       let ambulances = 0;
       let lookFx = null; // { side, until }: a glance over the shoulder, shown briefly
+      let phone = null; // texts arriving, in the Phone down lesson
       // the replay: position (a snapshot index), and stand-in cars to draw
       const replay = { pos: 0, playing: true, speed: 1, marks: [], ghosts: [], player: null, saved: null, shown: -1 };
       const lightCanvas = document.createElement("canvas"); // night: where light falls
@@ -610,6 +628,9 @@
          coach = new DrivingCoach(world, car, {
             speedLimit: lesson.speedLimit, rules: lesson.rules, followSeconds: lesson.followSeconds || 2, zones: extras.zones,
          });
+         phone = lesson.phone ? new PhoneBuzz({ forcedFirst: !demo }) : null;
+         phoneBanner.hidden = true;
+         phoneScreen.hidden = true;
          nextAmbulance = lesson.emergency ? 600 : Infinity;
          ambulances = 0;
          lookFx = null;
@@ -660,6 +681,8 @@
 
       function endDrive(reason) {
          state = "report";
+         phoneBanner.hidden = true;
+         phoneScreen.hidden = true;
          controls.enabled = false;
          controls.reset();
          endReason = reason;
@@ -707,6 +730,7 @@
                }
                checkRoute();
                checkLook();
+               if (phone) updatePhone();
                const siren = sim.traffic.filter((t) => t.siren).reduce((d, t) => Math.min(d, distance(t, car)), Infinity);
                sounds.siren(Math.max(0, 1 - siren / 1400));
                recorder.capture({
@@ -736,6 +760,54 @@
             car.arrived = true;
             car.damaged = true; // parked: the drive is over
          }
+      }
+
+      // ---------- the Phone down lesson ----------
+
+      function updatePhone() {
+         const e = phone.update(car);
+         if (phone.looking) {
+            phoneSpeed.textContent = "The car is still moving at " + Math.round(DrivingCoach.mph(car.speed)) + " mph.";
+            phoneTimer.style.width = (phone.blind / phone.blindFrames) * 100 + "%";
+            const typed = "ok i'm driving, ttyl";
+            phoneTyping.textContent = typed.slice(0, Math.max(1, Math.round((1 - phone.blind / phone.blindFrames) * typed.length)));
+         }
+         if (!e) return;
+         if (e.type == "buzz") {
+            phoneFrom.textContent = e.message.from;
+            phoneText.textContent = e.message.text;
+            phoneReply.hidden = e.message.forced || !!pilot;
+            phoneBanner.hidden = false;
+            sounds.buzz();
+            if (pilot) say({ title: "Phone buzzed. It can wait.", tip: "Eyes stay on the road. If it's urgent, pull over and park first." });
+         } else if (e.type == "look") {
+            showPhoneScreen();
+         } else if (e.type == "eyes-up") {
+            phoneScreen.hidden = true;
+            phoneBanner.hidden = true;
+            const detail = formatFeet(e.distance) + " without seeing the road";
+            if (e.forced) {
+               toast({ severity: "info", title: "You drove " + detail, tip: "That was one 2-second glance. Now leave the phone alone: the next texts will try to tempt you." }, 7000);
+            } else {
+               const event = coach.report("phone_use", { detail });
+               if (event) toast(event);
+            }
+         } else if (e.type == "ignored") {
+            phoneBanner.hidden = true;
+            const event = coach.report("ignored_phone");
+            if (event) toast(event);
+         }
+      }
+
+      function replyToText() {
+         if (phone && phone.reply()) showPhoneScreen();
+      }
+
+      function showPhoneScreen() {
+         phoneScreenFrom.textContent = phone.message ? phone.message.from : "";
+         phoneScreenText.textContent = phone.message ? phone.message.text : "";
+         phoneBanner.hidden = true;
+         phoneScreen.hidden = false;
       }
 
       // An ambulance, siren on, along the route (two in a drive, at most)
@@ -1267,7 +1339,8 @@
             [formatFeet(s.distanceMeters * Osm.UNITS_PER_METER), "driven"],
             [minutes + ":" + String(seconds).padStart(2, "0"), "time"],
             [s.topSpeed + " mph", "top speed"],
-            lesson.id == "hazards" ? [
+            lesson.id == "phone" ? [formatFeet(phone ? phone.totalBlindDistance : 0), "driven without looking"]
+            : lesson.id == "hazards" ? [
                hazards && hazards.averageReaction != null ? hazards.averageReaction.toFixed(1) + " s" : "–",
                "avg reaction (most drivers: 1.5 s)",
             ]

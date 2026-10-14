@@ -47,6 +47,7 @@ const FILES = [
    "js/school/badges.js",
    "js/school/replay.js",
    "js/school/autopilot.js",
+   "js/school/phone.js",
 ];
 
 const EXPORTS = [
@@ -54,7 +55,7 @@ const EXPORTS = [
    "WorldGenerator", "World", "Building", "Tree", "Marking", "Stop", "Yield",
    "Crossing", "Parking", "Light", "Start", "Target", "Car", "Sensor",
    "NeuralNetwork", "Level", "TrafficCar", "TrafficNetwork", "EmergencyVehicle", "Pathfinder", "Route", "MinHeap", "Genetics", "Simulation", "Places",
-   "DrivingSchool", "DrivingCoach", "LESSONS", "Pedestrian", "Crowd", "Progress", "Quiz", "QUIZ_BANK", "SIGNS", "Hazards", "PracticeLog", "Badges", "BADGES", "DriveRecorder", "Autopilot",
+   "DrivingSchool", "DrivingCoach", "LESSONS", "Pedestrian", "Crowd", "Progress", "Quiz", "QUIZ_BANK", "SIGNS", "Hazards", "PracticeLog", "Badges", "BADGES", "DriveRecorder", "Autopilot", "PhoneBuzz",
    "getIntersection", "distance", "average", "add", "subtract", "scale",
    "normalize", "angle", "lerp", "polysIntersect", "getNearestPoint", "perpendicular",
 ];

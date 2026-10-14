@@ -1099,6 +1099,136 @@ body.app {
    border-left-color: var(--bad);
 }
 
+/* ---------- the Phone down lesson ---------- */
+
+/* a text arriving, like a phone's notification */
+.phone-banner {
+   top: 100px;
+   right: 12px;
+   width: min(340px, calc(100% - 24px));
+   display: flex;
+   align-items: center;
+   gap: 10px;
+   padding: 10px 12px;
+   border-radius: 18px;
+   background: rgba(250, 250, 252, 0.97);
+   color: #111;
+   box-shadow: var(--shadow-lg);
+   animation: banner-in 0.3s ease-out;
+}
+
+.phone-banner > div {
+   flex: 1;
+   min-width: 0;
+   font-size: 14px;
+}
+
+.phone-banner b {
+   display: block;
+}
+
+.phone-banner .app-icon {
+   width: 36px;
+   height: 36px;
+   display: grid;
+   place-items: center;
+   border-radius: 10px;
+   background: #34c759;
+   font-size: 20px;
+}
+
+.phone-banner button {
+   flex: none;
+   min-height: 34px;
+   background: #e9e9ef;
+   color: #111;
+   border-color: transparent;
+}
+
+@keyframes banner-in {
+   from {
+      opacity: 0;
+      transform: translateY(-16px);
+   }
+}
+
+/* looking at the phone: the road is gone */
+.phone-screen {
+   position: absolute;
+   inset: 0;
+   z-index: 30;
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   justify-content: center;
+   gap: 16px;
+   background: #070a14; /* nothing of the road shows through */
+   color: #fff;
+}
+
+.phone {
+   width: 240px;
+   padding: 16px 14px 22px;
+   border: 6px solid #2a2f3a;
+   border-radius: 34px;
+   background: #f4f4f7;
+   color: #111;
+   display: flex;
+   flex-direction: column;
+   gap: 10px;
+   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.phone-head {
+   display: flex;
+   justify-content: space-between;
+   font-size: 13px;
+   padding-bottom: 8px;
+   border-bottom: 1px solid #ddd;
+}
+
+.phone-head span {
+   color: #888;
+}
+
+.bubble {
+   max-width: 85%;
+   padding: 8px 12px;
+   border-radius: 16px;
+   font-size: 14px;
+}
+
+.bubble.them {
+   background: #e3e3e8;
+   align-self: flex-start;
+}
+
+.bubble.me {
+   background: #2f7cf6;
+   color: #fff;
+   align-self: flex-end;
+}
+
+.phone-warning {
+   margin: 0;
+   text-align: center;
+   font-size: 15px;
+   opacity: 0.9;
+}
+
+.phone-timer {
+   width: 240px;
+   height: 6px;
+   border-radius: 3px;
+   background: rgba(255, 255, 255, 0.15);
+   overflow: hidden;
+}
+
+.phone-timer div {
+   height: 100%;
+   background: #ff5a5a;
+}
+
 /* the demo driver's thoughts, under the directions */
 #caption {
    top: 92px;
@@ -1127,7 +1257,14 @@ body.app {
 }
 
 #caption.fresh {
-   animation: toast-in 0.25s ease-out;
+   animation: caption-in 0.25s ease-out;
+}
+
+@keyframes caption-in {
+   from {
+      opacity: 0;
+      transform: translate(-50%, -6px);
+   }
 }
 
 .replaying #caption {
@@ -2401,6 +2538,10 @@ body.editor {
    #caption {
       top: 236px;
       font-size: 14px;
+   }
+
+   .phone-banner {
+      top: 160px;
    }
 
    .limit-sign b {

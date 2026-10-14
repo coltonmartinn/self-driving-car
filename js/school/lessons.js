@@ -3,7 +3,8 @@
 // rules: which rules the coach judges (null = all of them)
 // optional: pedestrians, hazards (surprise events), conditions ({ night, rain }),
 // followSeconds (minimum following distance, default 2), schoolZone,
-// blockers (delivery trucks to pass), emergency (an ambulance comes)
+// blockers (delivery trucks to pass), emergency (an ambulance comes),
+// phone (texts arrive while driving)
 const LESSONS = [
    {
       id: "basics",
@@ -161,6 +162,22 @@ const LESSONS = [
       speedLimit: 30,
       emergency: true,
       rules: ["crash", "curb", "emergency_yield", "yielded_emergency", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
+      id: "phone",
+      emoji: "📱",
+      title: "Phone down",
+      summary: "See what a 2-second glance really costs.",
+      learn: [
+         "Your phone will buzz while you drive. The first time, you'll glance at it, so you can see what that costs.",
+         "After that, leave it. Every glance is driving blind: at 30 mph, 2 seconds is almost 90 feet.",
+         "In real life, turn on Do Not Disturb While Driving before you set off. Nothing on your phone is worth a crash.",
+      ],
+      route: "following",
+      traffic: 18,
+      speedLimit: 30,
+      phone: true,
+      rules: ["crash", "curb", "phone_use", "ignored_phone", "tailgating", "red_light", "ran_stop", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
    },
    {
       id: "hazards",

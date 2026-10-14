@@ -32,6 +32,7 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
    const coach = new DrivingCoach(world, car, {
       speedLimit: lesson.speedLimit, rules: lesson.rules, followSeconds: lesson.followSeconds || 2, zones: extras.zones,
    });
+   const phone = lesson.phone ? new app.PhoneBuzz({ forcedFirst: false }) : null; // the demo driver ignores texts
    let nextAmbulance = lesson.emergency ? 600 : Infinity;
    let ambulances = 0;
    const spot = lesson.pullover ? DrivingSchool.parkingSpotOn(sim.trip.route, world) : null;
@@ -54,6 +55,10 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
       if (line) said.push(line.title);
       sim.step();
       coach.update(sim.others);
+      if (phone) {
+         const e = phone.update(car);
+         if (e && e.type == "ignored") coach.report("ignored_phone");
+      }
       if (hazards) {
          const h = hazards.update(car);
          if (h && h.type == "done" && h.handled) coach.report("hazard_avoided");

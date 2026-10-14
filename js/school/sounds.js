@@ -58,6 +58,12 @@ class Sounds {
       }
    }
 
+   // A phone buzzing (two short, low pulses)
+   buzz() {
+      this.#tone(140, 0.16, { type: "square", volume: 0.07 });
+      this.#tone(140, 0.16, { type: "square", volume: 0.07, delay: 0.24 });
+   }
+
    // An ambulance's wail; loudness 0 (silent) to 1 (right here). Call every frame.
    siren(loudness) {
       const ctx = loudness > 0.02 ? this.#audio() : null;
