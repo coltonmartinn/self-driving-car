@@ -2,7 +2,8 @@
 // route: what kind of trip to pick (see DrivingSchool.routeScore)
 // rules: which rules the coach judges (null = all of them)
 // optional: pedestrians, hazards (surprise events), conditions ({ night, rain }),
-// followSeconds (minimum following distance, default 2)
+// followSeconds (minimum following distance, default 2), schoolZone,
+// blockers (delivery trucks to pass), emergency (an ambulance comes)
 const LESSONS = [
    {
       id: "basics",
@@ -97,12 +98,29 @@ const LESSONS = [
       rules: ["crash", "curb", "pedestrian_yield", "yielded_pedestrian", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
    },
    {
+      id: "school",
+      emoji: "🏫",
+      title: "School zones",
+      summary: "Slow right down where children are.",
+      learn: [
+         "Yellow SCHOOL signs and road markings start a school zone. The limit drops, here to 15 mph.",
+         "Children can dart out between parked cars. Watch the sidewalks and be ready to stop.",
+         "The zone ends at the END SCHOOL ZONE sign. Then you can speed back up to the normal limit.",
+      ],
+      route: "following",
+      traffic: 10,
+      speedLimit: 30,
+      pedestrians: true,
+      schoolZone: true,
+      rules: ["crash", "curb", "school_zone_speeding", "pedestrian_yield", "yielded_pedestrian", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
       id: "pullover",
       emoji: "🅿️",
       title: "Pulling over",
       summary: "Signal, slow down, and stop neatly at the curb.",
       learn: [
-         "Signal right well before you pull over (press E), and check behind you.",
+         "Signal right well before you pull over (press E), and look over your right shoulder (press C).",
          "Slow down gradually and ease toward the curb inside the marked space.",
          "Stop parallel to the curb, close to it but without touching it.",
       ],
@@ -110,7 +128,39 @@ const LESSONS = [
       traffic: 8,
       speedLimit: 25,
       pullover: true,
-      rules: ["crash", "curb", "parked_well", "missed_spot", "crooked_park", "pullover_signal", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+      rules: ["crash", "curb", "parked_well", "missed_spot", "crooked_park", "pullover_signal", "no_blind_spot_check", "checked_blind_spot", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
+      id: "passing",
+      emoji: "🚚",
+      title: "Passing & blind spots",
+      summary: "Get around a double-parked truck safely.",
+      learn: [
+         "A delivery truck is stopped in your lane with its hazard lights on. You'll go around it.",
+         "First signal left (Q) and look over your left shoulder (Z): your mirrors miss your blind spot.",
+         "Go only when the other lane is clear far enough ahead. Then signal right (E) and move back.",
+      ],
+      route: "following",
+      traffic: 14,
+      speedLimit: 25,
+      blockers: 2,
+      rules: ["crash", "curb", "pass_no_signal", "no_blind_spot_check", "pass_return_signal", "unsafe_pass", "clean_pass", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
+      id: "emergency",
+      emoji: "🚑",
+      title: "Emergency vehicles",
+      summary: "Pull over and stop for sirens.",
+      learn: [
+         "When you hear a siren or see flashing lights, slow down and pull over to the right edge of the road.",
+         "Stop and wait until the ambulance has gone by, even when it's coming the other way.",
+         "Then signal, check your mirrors and blind spot, and pull back into your lane.",
+      ],
+      route: "following",
+      traffic: 12,
+      speedLimit: 30,
+      emergency: true,
+      rules: ["crash", "curb", "emergency_yield", "yielded_emergency", "wrong_way", "speeding", "reckless_speed"],
    },
    {
       id: "hazards",

@@ -1016,6 +1016,20 @@ body.app {
    box-shadow: 0 0 0 2px #fff;
 }
 
+/* the yellow-green school sign, shown in a school zone */
+.school-sign {
+   width: 50px;
+   height: 50px;
+   display: grid;
+   place-items: center;
+   padding-top: 10px;
+   background: #e6f238;
+   color: #111;
+   font-size: 8px;
+   font-weight: 800;
+   clip-path: polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%);
+}
+
 .limit-sign b {
    display: block;
    font-size: 24px;
@@ -1085,8 +1099,39 @@ body.app {
    border-left-color: var(--bad);
 }
 
-.toast.demo {
-   border-left-color: var(--accent);
+/* the demo driver's thoughts, under the directions */
+#caption {
+   top: 92px;
+   left: 50%;
+   transform: translateX(-50%);
+   display: flex;
+   gap: 10px;
+   align-items: flex-start;
+   width: min(480px, calc(100% - 32px));
+   padding: 10px 14px;
+   border-radius: 14px;
+   background: rgba(13, 20, 38, 0.86);
+   color: #fff;
+   box-shadow: var(--shadow-lg);
+   font-size: 15px;
+   pointer-events: none;
+}
+
+#caption b {
+   display: block;
+}
+
+#caption small {
+   color: rgba(255, 255, 255, 0.78);
+   font-size: 13px;
+}
+
+#caption.fresh {
+   animation: toast-in 0.25s ease-out;
+}
+
+.replaying #caption {
+   display: none;
 }
 
 /* a demo drive: the student watches, so no pedals */
@@ -1251,6 +1296,17 @@ body.app {
 
 #touchLeft {
    left: 12px;
+   flex-direction: column;
+   align-items: stretch;
+}
+
+/* shoulder checks, above the steering */
+.touch-controls .look-row button.small {
+   flex: 1;
+   width: auto;
+   height: 38px;
+   font-size: 14px;
+   font-weight: 700;
 }
 
 #touchRight {
@@ -2335,6 +2391,16 @@ body.editor {
 
    .limit-sign {
       width: 44px;
+   }
+
+   .school-sign {
+      width: 42px;
+      height: 42px;
+   }
+
+   #caption {
+      top: 236px;
+      font-size: 14px;
    }
 
    .limit-sign b {

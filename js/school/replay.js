@@ -44,7 +44,7 @@ class DriveRecorder {
          braking: !!(c.controls && c.controls.reverse && c.speed > 0),
          signal: (c.controls && c.controls.signal) || null,
          damaged: !!c.damaged, arrived: !!c.arrived,
-         width: c.width, height: c.height, siren: !!c.siren,
+         width: c.width, height: c.height, siren: !!c.siren, hazard: !!c.hazardLights,
       };
    }
 

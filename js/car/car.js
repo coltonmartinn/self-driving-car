@@ -20,6 +20,8 @@ class Car {
       this.routeIndex = 0; // which piece of the trip's route the car is on
       this.color = color;
       this.isPlayer = false; // driven by a person (traffic gives it room)
+      this.isParked = false; // stopped at the side for good (others drive around it)
+      this.hazardLights = false; // both blinkers flashing
 
       this.useBrain = controlType == "AI";
 
@@ -114,11 +116,17 @@ class Car {
    }
 
    #move() {
-      if (this.controls.forward) {
-         this.speed += this.acceleration;
+      // analog controls (a game controller or wheel: 0-1 pedals, -1..1
+      // steering) when there are any, otherwise the on/off keys
+      const c = this.controls;
+      const gas = c.throttle != null ? c.throttle : c.forward ? 1 : 0;
+      const brake = c.brake != null ? c.brake : c.reverse ? 1 : 0;
+      const steer = c.steer != null ? c.steer : (c.left ? 1 : 0) - (c.right ? 1 : 0);
+      if (gas) {
+         this.speed += this.acceleration * gas;
       }
-      if (this.controls.reverse) {
-         this.speed -= this.speed > 0 ? this.brakePower : this.acceleration;
+      if (brake) {
+         this.speed -= (this.speed > 0 ? this.brakePower : this.acceleration) * brake;
       }
 
       if (this.speed > this.maxSpeed) {
@@ -143,12 +151,7 @@ class Car {
          const rate = this.speedSteering
             ? Math.min(this.turnRate, Math.abs(this.speed) * 0.025)
             : this.turnRate;
-         if (this.controls.left) {
-            this.angle += rate * flip;
-         }
-         if (this.controls.right) {
-            this.angle -= rate * flip;
-         }
+         this.angle += rate * flip * steer;
       }
 
       this.x -= Math.sin(this.angle) * this.speed;
@@ -193,12 +196,13 @@ class Car {
          lamp(p[2], p[3], p[1], brake, braking ? 5 : 3.5);
          lamp(p[3], p[2], p[0], brake, braking ? 5 : 3.5);
          const signal = this.controls.signal;
-         if (signal && Math.floor(Date.now() / 350) % 2 == 0) {
+         if ((signal || this.hazardLights) && Math.floor(Date.now() / 350) % 2 == 0) {
             const amber = "#ffb020";
-            if (signal == "left") {
+            if (signal == "left" || this.hazardLights) {
                lamp(p[1], p[0], p[2], amber, 5);
                lamp(p[2], p[3], p[1], amber, 5);
-            } else {
+            }
+            if (signal == "right" || this.hazardLights) {
                lamp(p[0], p[1], p[3], amber, 5);
                lamp(p[3], p[2], p[0], amber, 5);
             }

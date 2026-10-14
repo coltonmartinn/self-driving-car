@@ -85,6 +85,33 @@ class DrivingCoach {
          severity: "minor", title: "Pulled over without signaling",
          tip: "Signal right before moving to the curb, so drivers behind know you're slowing down.",
       },
+      no_blind_spot_check: {
+         severity: "minor", title: "Didn't check your blind spot",
+         tip: "Before moving sideways (passing, changing lanes, pulling over), look over your shoulder. Z looks left, C looks right.",
+      },
+      pass_no_signal: {
+         severity: "minor", title: "Passed without signaling",
+         tip: "Signal left before moving out to pass, so drivers behind and ahead know what you're doing.",
+      },
+      pass_return_signal: {
+         severity: "minor", title: "Didn't signal back into your lane",
+         tip: "After passing, signal right before you move back into your lane.",
+      },
+      unsafe_pass: {
+         severity: "major", title: "Passed with oncoming traffic too close",
+         tip: "Only move into the other lane when it's clear far enough ahead to pass and get back. If in doubt, wait.",
+      },
+      school_zone_speeding: {
+         severity: "major", title: "Speeding in a school zone",
+         tip: "School zones have a low limit (often 15-20 mph) because children can step out without looking. Fines are usually doubled.",
+      },
+      emergency_yield: {
+         severity: "major", title: "Didn't pull over for the ambulance",
+         tip: "When you hear a siren or see flashing lights, slow down, pull to the right edge of the road and stop until it has passed.",
+      },
+      yielded_emergency: { severity: "good", title: "Pulled over for the ambulance" },
+      clean_pass: { severity: "good", title: "Passed safely" },
+      checked_blind_spot: { severity: "good", title: "Checked your blind spot" },
       waited_green: { severity: "good", title: "Waited for the green light" },
       signaled: { severity: "good", title: "Signaled the turn" },
       safe_gap: { severity: "good", title: "Kept a safe following distance" },
@@ -103,12 +130,14 @@ class DrivingCoach {
    }
 
    // options: speedLimit (mph), rules (ids to judge; default all),
-   // followSeconds (the minimum gap to the car ahead: 2, or more in bad weather)
-   constructor(world, car, { speedLimit = 30, rules = null, followSeconds = 2 } = {}) {
+   // followSeconds (the minimum gap to the car ahead: 2, or more in bad weather),
+   // zones (stretches of road with their own limit: [{ route, limit, kind }])
+   constructor(world, car, { speedLimit = 30, rules = null, followSeconds = 2, zones = [] } = {}) {
       this.world = world;
       this.car = car;
       this.speedLimit = speedLimit;
       this.followSeconds = followSeconds;
+      this.zones = zones;
       this.rules = rules ? new Set(rules) : null;
 
       this.events = [];
@@ -141,7 +170,13 @@ class DrivingCoach {
          this.junctionGrid.insert(p, SpatialGrid.boundsAround(p, 0));
       }
 
-      this.counters = { speeding: 0, reckless: 0, tailgating: 0, wrongSide: 0, wrongWay: 0, safeGap: 0 };
+      this.counters = { speeding: 0, reckless: 0, tailgating: 0, wrongSide: 0, wrongWay: 0, safeGap: 0, zoneSpeeding: 0 };
+      this.lastLook = { left: -Infinity, right: -Infinity }; // frames of the last shoulder checks
+      this.seenLooks = car.controls.lookCount || 0;
+      this.pass = null; // a pass in progress (around a parked vehicle)
+      this.emergencies = new Map(); // emergency vehicle -> what we did as it came
+      this.judgedEmergencies = new Set(); // (each one is judged once)
+      this.reportedZones = new Set();
       this.cooldown = {}; // rule -> frames until it can be reported again
       this.turn = null; // the turn in progress through a junction
       this.lastSignal = { side: null, frame: -Infinity };
@@ -215,6 +250,8 @@ class DrivingCoach {
             this.report("curb");
          } else if (other.isPedestrian) {
             this.report("hit_pedestrian");
+         } else if (other.isParked) {
+            this.report("crash"); // it can't have moved into us
          } else if (Math.abs(car.speed) < 0.1 || (Math.abs(car.speed) < 0.3 && Math.abs(other.speed) > 0.3)) {
             this.report("hit_by_traffic"); // we were (nearly) stopped: they hit us
          } else {
@@ -228,12 +265,18 @@ class DrivingCoach {
       if (signal) {
          this.lastSignal = { side: signal, frame: this.frame };
       }
+      const looks = car.controls.lookCount || 0;
+      if (looks != this.seenLooks) {
+         this.seenLooks = looks;
+         this.lastLook[car.controls.looked] = this.frame;
+      }
 
       this.#checkSpeed();
+      this.#checkEmergency(traffic.filter((t) => t.siren));
       this.#checkSignsAndSignals();
       this.#checkCrosswalks(traffic.filter((t) => t.isPedestrian));
       this.#checkFollowing(traffic);
-      this.#checkLane();
+      this.#checkLane(traffic);
       this.#checkTurns(signal);
       return this.events.slice(before);
    }
@@ -242,12 +285,51 @@ class DrivingCoach {
       return new Point(-Math.sin(this.car.angle), -Math.cos(this.car.angle));
    }
 
+   // The zone the car is in (e.g. a school zone), if any
+   zoneAt(p) {
+      for (const zone of this.zones) {
+         const loc = zone.route.locate(p, 0, zone.route.points.length);
+         if (loc.distance < this.world.roadWidth / 2 + 10 && loc.progress > 0 && loc.progress < zone.route.length) {
+            return zone;
+         }
+      }
+      return null;
+   }
+
+   // The speed limit where the car is now (mph)
+   get currentLimit() {
+      const zone = this.zoneAt(this.car);
+      return zone ? Math.min(zone.limit, this.speedLimit) : this.speedLimit;
+   }
+
+   // Did the student look over that shoulder in the last `frames` frames?
+   lookedRecently(side, frames = 300) {
+      return this.frame - this.lastLook[side] <= frames;
+   }
+
+   signaledRecently(side, frames = 300) {
+      return this.car.controls.signal == side || (this.lastSignal.side == side && this.frame - this.lastSignal.frame <= frames);
+   }
+
    #checkSpeed() {
       // reported once per stretch over the limit (a second over is a slip;
       // staying over is speeding)
       const mph = DrivingCoach.mph(this.car.speed);
-      const detail = Math.round(mph) + " mph in a " + this.speedLimit;
-      if (mph > this.speedLimit + 3) {
+      const zone = this.zoneAt(this.car);
+      if (zone && zone.kind == "school") {
+         // its own, bigger mistake; once per zone
+         this.counters.zoneSpeeding = mph > zone.limit + 3 ? this.counters.zoneSpeeding + 1 : 0;
+         if (this.counters.zoneSpeeding == 45 && !this.reportedZones.has(zone)) {
+            this.reportedZones.add(zone);
+            this.report("school_zone_speeding", { detail: Math.round(mph) + " mph in a " + zone.limit });
+         }
+         this.counters.speeding = 0;
+         return;
+      }
+      this.counters.zoneSpeeding = 0;
+      const limit = this.currentLimit;
+      const detail = Math.round(mph) + " mph in a " + limit;
+      if (mph > limit + 3) {
          this.counters.speeding++;
          if (this.counters.speeding == 60) {
             this.report("speeding", { detail });
@@ -255,7 +337,7 @@ class DrivingCoach {
       } else {
          this.counters.speeding = 0;
       }
-      if (mph > this.speedLimit + 15) {
+      if (mph > limit + 15) {
          this.counters.reckless++;
          if (this.counters.reckless == 30) {
             this.report("reckless_speed", { detail });
@@ -435,9 +517,122 @@ class DrivingCoach {
       return null;
    }
 
-   // Right side of two-way roads, and the right way on one-way roads
-   #checkLane() {
+   // Signed distance from the middle of the road (+ = right side), on a
+   // two-way road the car is driving along (pointing within ~60 degrees of
+   // it, or within ~35 with strict); otherwise null
+   laneOffset(strict = false) {
       const car = this.car;
+      let best = null;
+      for (const seg of this.segmentGrid.query(SpatialGrid.boundsAround(car, 150))) {
+         const d = seg.distanceToPoint(car);
+         if (!best || d < best.d) {
+            best = { seg, d };
+         }
+      }
+      if (!best || best.d > this.world.roadWidth / 2 || best.seg.oneWay) {
+         return null;
+      }
+      const segDir = best.seg.directionVector();
+      const along = dot(this.heading(), segDir);
+      if (Math.abs(along) < (strict ? 0.8 : 0.5)) {
+         return null;
+      }
+      const dir = along > 0 ? segDir : scale(segDir, -1);
+      return dot(subtract(car, best.seg.projectPoint(car).point), perpendicular(dir));
+   }
+
+   // A parked or stopped vehicle blocking our lane, near us (we may pass it)
+   blockerNear(traffic) {
+      const car = this.car;
+      const heading = this.heading();
+      return traffic.find((t) => {
+         if (!t.isParked) return false;
+         const rel = subtract(t, car);
+         const along = dot(rel, heading);
+         return along > -t.height - 60 && along < 400 && Math.abs(rel.x * heading.y - rel.y * heading.x) < this.world.roadWidth * 0.6;
+      }) || null;
+   }
+
+   // Passing a parked vehicle: signal, check the blind spot, make sure the
+   // other lane is clear, then signal back
+   #checkPassing(traffic) {
+      if (this.pass && this.frame - this.pass.frame > 1200) {
+         this.pass = null; // turned off somewhere instead of finishing the pass
+      }
+      const offset = this.laneOffset();
+      if (offset == null) {
+         return;
+      }
+      const rw = this.world.roadWidth;
+      const blocker = this.blockerNear(traffic);
+      if (!this.pass && blocker && offset < -rw * 0.05) {
+         this.pass = { blocker, frame: this.frame, signaled: this.signaledRecently("left"), looked: this.lookedRecently("left") };
+         if (!this.pass.signaled) this.report("pass_no_signal");
+         if (!this.pass.looked) this.report("no_blind_spot_check", { detail: "left, before passing" });
+         // anyone coming the other way, too close to pass safely?
+         const car = this.car;
+         const heading = this.heading();
+         const oncoming = traffic.some((t) => {
+            if (t.isParked || t.isPedestrian) return false;
+            const theirs = new Point(-Math.sin(t.angle), -Math.cos(t.angle));
+            if (dot(theirs, heading) > -0.7) return false;
+            const rel = subtract(t, car);
+            const along = dot(rel, heading);
+            const closing = (Math.abs(car.speed) + Math.abs(t.speed)) * 60 * 2.5; // 2.5 seconds
+            return along > 0 && along < Math.max(250, closing) && Math.abs(rel.x * heading.y - rel.y * heading.x) < rw;
+         });
+         if (oncoming) {
+            this.pass.unsafe = true;
+            this.report("unsafe_pass");
+         }
+      } else if (this.pass && offset > rw * 0.1) {
+         const back = this.signaledRecently("right");
+         if (!back) this.report("pass_return_signal");
+         if (back && this.pass.signaled && this.pass.looked && !this.pass.unsafe) this.report("clean_pass");
+         this.pass = null;
+      }
+   }
+
+   // An ambulance with its siren on: pull over to the right and stop until
+   // it has gone by
+   #checkEmergency(sirens) {
+      const car = this.car;
+      const heading = this.heading();
+      for (const e of sirens) {
+         const rel = subtract(e, car);
+         const along = dot(rel, heading);
+         if (distance(e, car) > 900) {
+            this.emergencies.delete(e);
+            continue;
+         }
+         let seen = this.emergencies.get(e);
+         if (!seen) {
+            seen = { along, stoppedRight: 0, judged: this.judgedEmergencies.has(e) };
+            this.emergencies.set(e, seen);
+         }
+         // pulled over to the right, or stopped at an intersection (no
+         // pulling over in the middle of one)
+         const offset = this.laneOffset();
+         const right = offset == null || offset > this.world.roadWidth / 4 + 4 || this.nearJunction(this.world.roadWidth * 2.2);
+         if (Math.abs(car.speed) < 0.3 && right) seen.stoppedRight++;
+         // it's going past us now (coming towards us, or overtaking us)
+         if (!seen.judged && Math.sign(seen.along) != Math.sign(along) && distance(e, car) < 200) {
+            seen.judged = true;
+            this.judgedEmergencies.add(e);
+            this.report(seen.stoppedRight > 20 ? "yielded_emergency" : "emergency_yield");
+         }
+         seen.along = along;
+      }
+   }
+
+   // Right side of two-way roads, and the right way on one-way roads
+   #checkLane(traffic = []) {
+      const car = this.car;
+      if (this.pass || this.blockerNear(traffic)) {
+         this.counters.wrongSide = 0; // passing something blocking the lane is fine
+         this.#checkPassing(traffic);
+         return;
+      }
       if (Math.abs(car.speed) < 0.3 || this.nearJunction(this.world.roadWidth * 1.2)) {
          this.counters.wrongSide = 0;
          this.counters.wrongWay = 0;
@@ -538,6 +733,11 @@ class DrivingCoach {
       const events = [];
       const signaled = this.lastSignal.side == "right" && this.frame - this.lastSignal.frame < 600;
       if (!signaled) events.push(this.report("pullover_signal"));
+      if (this.rules && this.rules.has("no_blind_spot_check")) {
+         events.push(this.lookedRecently("right", 900)
+            ? this.report("checked_blind_spot")
+            : this.report("no_blind_spot_check", { detail: "right, before pulling over" }));
+      }
       if (!inside) {
          events.push(this.report("missed_spot"));
       } else if (off > 12) {

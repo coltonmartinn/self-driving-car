@@ -5,6 +5,10 @@ class Controls {
       this.right = false;
       this.reverse = false;
       this.signal = null; // turn signal: "left", "right" or null
+      // analog (a game controller): -1..1 steering, 0-1 pedals; null = use the on/off ones
+      this.steer = null;
+      this.throttle = null;
+      this.brake = null;
 
       switch (type) {
          case "KEYS":

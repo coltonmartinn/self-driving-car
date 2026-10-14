@@ -16,7 +16,18 @@ class Autopilot {
       this.served = new Set(); // stop signs we've already stopped at
       this.stopWait = 0;
       this.said = new Map(); // what -> frame, so each thing is said once
+      this.queue = []; // lines waiting to be said (one at a time)
       this.waitedAtRed = null;
+      this.passing = null; // a parked truck we're driving around
+      this.yielding = null; // an ambulance we've pulled over for
+   }
+
+   // A glance over the shoulder (once per maneuver)
+   #look(side, key) {
+      if (this.looked != key && this.controls.lookOver) {
+         this.looked = key;
+         this.controls.lookOver(side, true);
+      }
    }
 
    heading() {
@@ -93,13 +104,73 @@ class Autopilot {
          const toSpot = this.spotAt - loc.progress; // from the middle of the car
          if (toSpot < 380) {
             controls.signal = "right";
-            say("park", "Pulling over: signal right, check behind", "Then slow down gradually and ease toward the curb.");
+            this.#look("right", "park");
+            say("park", "Pulling over: signal right, look over my right shoulder", "Then slow down gradually and ease toward the curb.");
             const curb = rw / 2 - 24;
             const t = toSpot < 220 ? 1 : 1 - (toSpot - 220) / 160;
             aim = add(p1, scale(perpendicular(dir), rw / 4 + (curb - rw / 4) * t));
             parkTarget = Math.max(0, toSpot - 4) / 90;
+            if (toSpot < 150) this.#look("right", "park-again"); // one more check right before moving over
             if (toSpot < 60) say("park2", "Stopping inside the space", "Parallel to the curb, close but not touching.");
          }
+      }
+
+      // a school zone ahead: slow to its limit before reaching it
+      const zone = this.coach.zoneAt(car) || this.coach.zoneAt(route.pointAt(loc.progress + 160));
+      if (zone) {
+         target = limit((zone.limit - 2) / mph, "school zone");
+         say(zone, "School zone: slowing to " + zone.limit + " mph", "Children could step out from anywhere. Eyes on the sidewalks.");
+      }
+
+      // a truck parked in our lane: wait for a gap, then go around it
+      const offsetFor = (lateral) => add(p1, scale(perpendicular(dir), lateral));
+      const blocker = this.passing || this.#blockerAhead(route, loc.progress);
+      if (blocker) {
+         const along = dot(subtract(blocker, car), heading);
+         if (this.passing && along < -blocker.height / 2 - 55) {
+            say("back" + this.#key(blocker), "Past it: signal right, back into my lane", "And off goes the signal once I'm back.");
+            controls.signal = "right";
+            this.passing = null;
+            this.returning = 50;
+         } else if (this.passing) {
+            aim = offsetFor(-rw / 4);
+            target = limit(1.4, "passing");
+            if (along < -10) controls.signal = "right";
+         } else if (along < 330) {
+            say(blocker, "A truck is blocking our lane", "We'll go around it, but only when the other lane is clear.");
+            controls.signal = "left";
+            this.#look("left", blocker);
+            if (this.#otherLaneClear(blocker)) {
+               if (!this.passing) say("go" + this.#key(blocker), "Signaled, blind spot checked, lane's clear: going around", "Not too fast, and leave room beside the truck.");
+               this.passing = blocker;
+            } else {
+               say("wait" + this.#key(blocker), "Oncoming car: waiting behind the truck", "Passing means using their lane. Never squeeze in front of them.", 600);
+               // (far enough back to pull out around it without clipping its corner)
+               target = limit(Math.max(0, (along - blocker.height / 2 - 110) / 80), "truck ahead");
+            }
+         }
+      }
+      if (this.returning > 0 && --this.returning == 0 && controls.signal == "right") controls.signal = null;
+
+      // an ambulance with its siren on: pull over to the right and stop
+      // (and wait until it's well past before pulling out again)
+      const siren = this.sim.traffic.find((t) => t.siren && distance(t, car) < 800 &&
+         dot(subtract(car, t), new Point(-Math.sin(t.angle), -Math.cos(t.angle))) > -200);
+      if (siren) {
+         this.yielding = siren;
+         say(siren, "Siren! Pulling over to the right and stopping", "Check the blind spot, signal right, then stop near the curb.");
+         controls.signal = "right";
+         this.#look("right", siren);
+         aim = offsetFor(rw / 2 - 21);
+         // creep over to the curb, unless we're at an intersection: then just stop
+         const offset = this.coach.laneOffset();
+         const atCurb = offset == null || offset > rw / 2 - 30 || this.coach.nearJunction(rw * 2.2);
+         // (if it's already close, stopping right away is safest)
+         target = limit(atCurb || distance(siren, car) < 260 ? 0 : 1.1, "ambulance");
+      } else if (this.yielding) {
+         say("gone" + this.#key(this.yielding), "It's gone by: signal left, check, and back into the lane", "Watch for other drivers doing the same.");
+         controls.signal = null;
+         this.yielding = null;
       }
 
       const desired = -angle(subtract(aim, car)) - Math.PI / 2;
@@ -199,7 +270,39 @@ class Autopilot {
       controls.right = steer < -0.03;
       controls.forward = car.speed < target - 0.03;
       controls.reverse = car.speed > target + 0.08;
-      return lines[0] || null;
+      this.queue.push(...lines);
+      return this.#next();
+   }
+
+   // A parked vehicle in our lane ahead, on the route
+   #blockerAhead(route, progress) {
+      const car = this.car;
+      const heading = this.heading();
+      return (this.sim.parked || []).find((p) => {
+         const rel = subtract(p, car);
+         const along = dot(rel, heading);
+         return along > 0 && along < 420 && Math.abs(rel.x * heading.y - rel.y * heading.x) < 40 &&
+            route.locate(p, 0, route.points.length).progress > progress;
+      }) || null;
+   }
+
+   // Nobody coming the other way for long enough to get around `blocker`
+   #otherLaneClear(blocker) {
+      const car = this.car;
+      const heading = this.heading();
+      const rw = this.world.roadWidth;
+      return this.sim.traffic.every((t) => {
+         const rel = subtract(t, car);
+         const along = dot(rel, heading);
+         const lateral = rel.x * heading.y - rel.y * heading.x;
+         const theirs = new Point(-Math.sin(t.angle), -Math.cos(t.angle));
+         if (along < -60 || Math.abs(lateral) > rw * 1.2) return true;
+         if (dot(theirs, heading) > 0.7) {
+            // same way: only a problem if it's passing too, right beside us
+            return Math.abs(along) > 120 || Math.abs(lateral) < 20;
+         }
+         return along > dot(subtract(blocker, car), heading) + 700;
+      });
    }
 
    // How far the road ahead turns from where the car is pointing (radians)
@@ -212,6 +315,15 @@ class Autopilot {
          most = Math.max(most, Math.abs(Math.atan2(now.x * d.y - now.y * d.x, dot(now, d))));
       }
       return most;
+   }
+
+   // One line at a time, at least a third of a second apart, so none get lost
+   #next() {
+      if (this.queue.length == 0 || this.frame - (this.saidAt || -Infinity) < 20) {
+         return null;
+      }
+      this.saidAt = this.frame;
+      return this.queue.shift();
    }
 
    #key(m) {

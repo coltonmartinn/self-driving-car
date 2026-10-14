@@ -36,6 +36,7 @@ class World {
       this.cars = [];
       this.bestCar = null;
       this.traffic = [];
+      this.parked = []; // vehicles parked for good (see Simulation.addParked)
       this.crowd = null; // pedestrians (a Crowd), if any
       this.route = null; // GPS route (a Route) and its destination marker
       this.destination = null;
@@ -478,6 +479,9 @@ class World {
 
       if (this.crowd) {
          this.crowd.draw(ctx);
+      }
+      for (const car of this.parked) {
+         car.draw(ctx);
       }
       for (const car of this.traffic) {
          car.draw(ctx);

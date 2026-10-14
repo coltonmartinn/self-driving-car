@@ -58,6 +58,35 @@ class Sounds {
       }
    }
 
+   // An ambulance's wail; loudness 0 (silent) to 1 (right here). Call every frame.
+   siren(loudness) {
+      const ctx = loudness > 0.02 ? this.#audio() : null;
+      if (!ctx) {
+         if (this.sirenGain) {
+            this.sirenGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+         }
+         return;
+      }
+      if (!this.sirenOsc) {
+         this.sirenOsc = ctx.createOscillator();
+         this.sirenOsc.type = "sawtooth";
+         const wobble = ctx.createOscillator();
+         wobble.frequency.value = 0.6; // up and down, a bit more than once a second
+         const depth = ctx.createGain();
+         depth.gain.value = 260;
+         wobble.connect(depth).connect(this.sirenOsc.frequency);
+         this.sirenOsc.frequency.value = 900;
+         this.sirenGain = ctx.createGain();
+         this.sirenGain.gain.value = 0;
+         const soften = ctx.createBiquadFilter();
+         soften.frequency.value = 1800;
+         this.sirenOsc.connect(soften).connect(this.sirenGain).connect(ctx.destination);
+         this.sirenOsc.start();
+         wobble.start();
+      }
+      this.sirenGain.gain.setTargetAtTime(0.06 * loudness, ctx.currentTime, 0.1);
+   }
+
    finish(passed) {
       const notes = passed ? [523, 659, 784, 1047] : [392, 330];
       notes.forEach((f, i) => this.#tone(f, 0.3, { volume: 0.1, delay: i * 0.12 }));

@@ -69,6 +69,9 @@ class TrafficCar extends Car {
       this.ghostFrames = 0;
       this.playerWait = 0; // frames spent waiting on a stopped human driver
       this.hazardBrake = 0; // frames of emergency stop (a Driving School hazard)
+      this.plan = null; // graph points to drive through, in order (else random turns)
+      this.passing = null; // a parked vehicle we're driving around
+      this.siren = false;
    }
 
    heading() {
@@ -82,6 +85,14 @@ class TrafficCar extends Car {
 
    #chooseNext() {
       const options = this.network.outgoing.get(this.edge.to) || [];
+      if (this.plan && this.plan.length > 0) {
+         const planned = options.find((e) => e.to == this.plan[0]);
+         this.plan.shift();
+         if (planned) {
+            return planned;
+         }
+         this.plan = null; // off the plan: wander like everyone else
+      }
       // don't make a U-turn unless it's a dead end
       const forward = options.filter((e) => e.to != this.edge.from);
       const pool = forward.length > 0 ? forward : options;
@@ -142,6 +153,29 @@ class TrafficCar extends Car {
          }
       }
 
+      // driving around a parked vehicle: aim for the other lane until past it
+      const rw = this.network.world.roadWidth;
+      const clearOf = this.siren ? this.passing && this.passing.height + 90 : this.passing && this.passing.height / 2 + 45;
+      if (this.passing && dot(subtract(this.passing, pos), lane.dir) < -clearOf) {
+         this.passing = null; // past it: back to our lane
+      }
+      if (!this.passing) {
+         this.passing = this.#blockerToPass(otherTraffic, lane.dir, rw);
+      }
+      if (this.passing) {
+         // into the other lane; an ambulance just straddles the middle, so
+         // cars pulled over on both sides have room
+         // (and gives a student a wider berth)
+         const shift = !this.siren ? -rw / 2 : this.passing.isPlayer ? -rw / 4 - 14 : -rw / 4;
+         target = add(target, scale(perpendicular(lane.dir), shift));
+      }
+      // an ambulance with its siren on coming our way: pull over to the right
+      const yieldTo = this.siren ? null : otherTraffic.find((o) => o.siren && distance(o, pos) < 450 &&
+         dot(subtract(pos, o), new Point(-Math.sin(o.angle), -Math.cos(o.angle))) > 0);
+      if (yieldTo) {
+         target = add(target, scale(perpendicular(lane.dir), rw / 2 - 22 - rw / 4));
+      }
+
       const toTarget = subtract(target, pos);
       const desiredAngle = -angle(toTarget) - Math.PI / 2;
       let diff = desiredAngle - this.angle;
@@ -164,7 +198,7 @@ class TrafficCar extends Car {
          this.ghostFrames--;
       }
       for (const other of otherTraffic) {
-         if (other == this || (ghost && !other.isPlayer && !other.isPedestrian)) continue;
+         if (other == this || other == this.passing || (ghost && !other.isPlayer && !other.isPedestrian)) continue;
          if (other.isPedestrian && (!other.onRoad || other.blockedBy == this)) continue; // on the sidewalk, or waiting for us
          const rel = new Point(other.x - this.x, other.y - this.y);
          const along = dot(rel, heading);
@@ -172,7 +206,7 @@ class TrafficCar extends Car {
          const lateral = Math.abs(rel.x * heading.y - rel.y * heading.x);
          // a human driver close in front (even off to the side, e.g. while
          // turning a corner) gets a full stop: never bump into a student
-         const closePlayer = other.isPlayer && along > 10 && along < 100 && lateral < 60;
+         const closePlayer = other.isPlayer && along > 10 && along < 100 && lateral < (this.siren ? 36 : 60);
          // anyone walking across the road ahead, in either lane, gets to finish
          if (!closePlayer && lateral > (other.isPedestrian ? 80 : other.isPlayer ? 45 : 28)) continue;
          const limit = closePlayer ? 0 : stoppingSpeed(along - 75);
@@ -185,10 +219,15 @@ class TrafficCar extends Car {
          }
       }
 
+      if (yieldTo) {
+         targetSpeed = Math.min(targetSpeed, 0.6 * Math.max(0, (distance(yieldTo, pos) - 150) / 300)); // and stop
+      }
+
       // traffic lights and signs for our direction (only the nearest light
-      // counts, like a driver watching the signal at the next stop line)
+      // counts, like a driver watching the signal at the next stop line;
+      // an ambulance with its siren on doesn't have to stop)
       const ahead = [];
-      for (const m of this.network.controls) {
+      for (const m of this.siren ? [] : this.network.controls) {
          const rel = subtract(m.center, pos);
          const along = dot(rel, heading);
          if (along < -10 || along > 150) continue;
@@ -223,6 +262,25 @@ class TrafficCar extends Car {
          }
       }
 
+      // last line of defense: never drive into a student's car. Where would
+      // we be in a few frames? If that overlaps them, stop.
+      let hardStop = false;
+      if (targetSpeed > 0.05 || this.speed > 0.05) {
+         const ahead = scale(heading, Math.max(this.speed, 0.5) * 10 + 6);
+         const future = this.polygon.map((p) => ({ x: p.x + ahead.x, y: p.y + ahead.y }));
+         for (const other of otherTraffic) {
+            if (!other.isPlayer || Math.abs(other.x - pos.x) > 150 || Math.abs(other.y - pos.y) > 150) continue;
+            // with a margin around them, for drifting in from the side
+            const roomy = other.polygon.map((p) => ({ x: other.x + (p.x - other.x) * 1.35, y: other.y + (p.y - other.y) * 1.35 }));
+            if (polysIntersect(future, roomy)) {
+               targetSpeed = 0;
+               hardStop = true;
+               blocked = true;
+               if (Math.abs(other.speed) < 0.1) blockedByPlayer = true;
+            }
+         }
+      }
+
       // if stuck behind someone for too long (e.g. a standoff in a junction),
       // stop worrying about other cars for a moment so traffic keeps flowing
       if (blocked && this.speed < 0.1) {
@@ -238,7 +296,7 @@ class TrafficCar extends Car {
       // emergency stop: brake lights on, as hard as a real car can (about
       // 9 m/s²), so a driver keeping their distance has time to react
       // (braking + rolling friction = 0.025 units/frame², i.e. 9 m/s²)
-      this.brakePower = this.hazardBrake > 0 ? 0.017 : this.acceleration;
+      this.brakePower = this.hazardBrake > 0 ? 0.017 : hardStop ? 0.3 : this.acceleration;
       this.friction = this.hazardBrake > 0 ? 0.008 : 0.05;
       if (this.hazardBrake > 0) {
          this.hazardBrake--;
@@ -256,5 +314,83 @@ class TrafficCar extends Car {
       this.controls.right = diff < -0.02;
       this.controls.forward = this.speed < targetSpeed - 0.05;
       this.controls.reverse = this.speed > targetSpeed + 0.3 && this.speed > 0.25; // brake
+   }
+
+   // A parked vehicle in our lane ahead that we can drive around now: the
+   // other lane is clear of oncoming cars (an ambulance doesn't wait, and
+   // also goes around cars that stopped to let it by)
+   #blockerToPass(otherTraffic, dir, rw) {
+      const pos = new Point(this.x, this.y);
+      let blocker = null;
+      for (const o of otherTraffic) {
+         // (an ambulance also goes past anyone who stopped for it, the student too)
+         const passable = o.isParked || (this.siren && !o.isPedestrian && Math.abs(o.speed) < 0.3);
+         if (!passable) continue;
+         const rel = subtract(o, pos);
+         const along = dot(rel, dir);
+         if (along > 0 && along < 220 && Math.abs(rel.x * dir.y - rel.y * dir.x) < (this.siren ? 50 : 30)) {
+            blocker = o;
+         }
+      }
+      if (!blocker || this.siren) {
+         return blocker;
+      }
+      const clear = otherTraffic.every((o) => {
+         if (o == this || o.isParked || o.isPedestrian) return true;
+         const rel = subtract(o, pos);
+         const along = dot(rel, dir);
+         const lateral = rel.x * dir.y - rel.y * dir.x; // + = to our left
+         return along < -40 || along > 650 || Math.abs(lateral) > rw * 0.9 || (Math.abs(lateral) < 20 && along > 0);
+      });
+      return clear ? blocker : null;
+   }
+}
+
+// An ambulance with its siren on: drives faster, ignores lights and signs,
+// and everyone (including the student) should pull over and let it by
+class EmergencyVehicle extends TrafficCar {
+   constructor(network, edge, t, speed) {
+      super(network, edge, t);
+      this.siren = true;
+      this.color = "#f4f6fb";
+      this.width = 32;
+      this.height = 62;
+      this.cruiseSpeed = speed;
+      this.maxSpeed = speed + 0.5;
+      this.speed = speed * 0.8;
+      this.place(this.x, this.y, this.angle);
+   }
+
+   draw(ctx) {
+      super.draw(ctx);
+      if (this.damaged) return;
+      // a red stripe and a flashing red/blue light bar on the roof
+      const p = this.polygon;
+      const mid = (a, b, t) => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) });
+      ctx.save();
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = "#d62828";
+      ctx.beginPath();
+      const s1 = mid(p[1], p[2], 0.62);
+      const s2 = mid(p[0], p[3], 0.62);
+      ctx.moveTo(s1.x, s1.y);
+      ctx.lineTo(s2.x, s2.y);
+      ctx.stroke();
+      const flash = Math.floor(Date.now() / 160) % 2 == 0;
+      const left = mid(mid(p[1], p[2], 0.45), mid(p[0], p[3], 0.45), 0.25);
+      const right = mid(mid(p[1], p[2], 0.45), mid(p[0], p[3], 0.45), 0.75);
+      for (const { at, on, color } of [{ at: left, on: flash, color: "#ff2b2b" }, { at: right, on: !flash, color: "#2b6bff" }]) {
+         ctx.beginPath();
+         ctx.fillStyle = on ? color : "rgba(60,60,70,0.8)";
+         ctx.arc(at.x, at.y, on ? 7 : 5, 0, Math.PI * 2);
+         ctx.fill();
+         if (on) {
+            ctx.beginPath();
+            ctx.fillStyle = color == "#ff2b2b" ? "rgba(255,43,43,0.25)" : "rgba(43,107,255,0.25)";
+            ctx.arc(at.x, at.y, 26, 0, Math.PI * 2);
+            ctx.fill();
+         }
+      }
+      ctx.restore();
    }
 }

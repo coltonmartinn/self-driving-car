@@ -33,3 +33,21 @@ test("the demo driver passes the road test in a busy downtown", () => {
    const r = clean("roadtest", "shibuya", 3);
    assert.ok(r.coach.stats.turns >= 2 && r.coach.stats.signaledTurns == r.coach.stats.turns);
 });
+
+test("the demo driver slows to 15 in a school zone", () => {
+   const r = clean("school", "beverly-hills", 1);
+   assert.ok(r.extras.zones.length == 1);
+   assert.ok(r.said.some((s) => /School zone/.test(s)));
+});
+
+test("the demo driver passes a double-parked truck: signal, blind spot, clear lane, signal back", () => {
+   const r = clean("passing", "beverly-hills", 1);
+   assert.ok(r.coach.events.some((e) => e.rule == "clean_pass"));
+});
+
+test("the demo driver pulls over for an ambulance, coming towards it or from behind", () => {
+   const towards = clean("emergency", "beverly-hills", 2);
+   assert.ok(towards.coach.events.some((e) => e.rule == "yielded_emergency"));
+   const behind = clean("emergency", "san-francisco", 1); // one-way streets: it comes up from behind
+   assert.ok(behind.coach.events.some((e) => e.rule == "yielded_emergency"));
+});

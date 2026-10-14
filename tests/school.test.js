@@ -7,6 +7,7 @@ const { loadApp } = require("./helpers/loadApp");
 const {
    Point, Segment, Graph, World, Car, Light, Stop, Route, Simulation, Crossing,
    WorldGenerator, DrivingSchool, DrivingCoach, LESSONS, distance, Pedestrian, Crowd, TrafficCar, TrafficNetwork, Hazards, Parking, perpendicular, add, scale, normalize, subtract,
+   polysIntersect: polysIntersectApp,
 } = loadApp({ seed: 3 });
 
 // A road going north from (0, 0), with a road to the east at y = -1500
@@ -542,4 +543,125 @@ test("two quick turns the same way are judged as turns that way, not as one turn
    car.x = world.roadWidth * 3; // and drives out of the junction
    coach.update([]);
    assert.equal(coach.events.map((e) => e.rule).join(), "signaled");
+});
+
+// ---------- school zones, passing, emergency vehicles ----------
+
+test("in a school zone the limit drops, and speeding there is a bigger mistake, once per zone", () => {
+   const { world } = tJunction();
+   const zone = { route: new Route([new Point(world.roadWidth / 4, -300), new Point(world.roadWidth / 4, -1000)]), limit: 15, kind: "school" };
+   const car = studentCar(world, -100);
+   const coach = new DrivingCoach(world, car, { speedLimit: 30, zones: [zone] });
+   assert.equal(coach.currentLimit, 30);
+   car.speed = 1.6; // about 21 mph: fine on the street, too fast in the zone
+   car.controls.forward = true;
+   car.maxSpeed = 1.6;
+   drive(car, coach, () => car.y < -1100, 2000);
+   assert.equal(coach.events.map((e) => e.rule).join(), "school_zone_speeding");
+   assert.equal(coach.events[0].severity, "major");
+});
+
+test("the limit sign follows the zone you're in", () => {
+   const { world } = tJunction();
+   const zone = { route: new Route([new Point(0, -300), new Point(0, -1000)]), limit: 15, kind: "school" };
+   const coach = new DrivingCoach(world, studentCar(world, -500), { speedLimit: 30, zones: [zone] });
+   assert.equal(coach.currentLimit, 15);
+});
+
+// A truck parked in the northbound lane at y = -800
+function truckAhead() {
+   const t = tJunction();
+   const sim = new Simulation(t.world, { trafficOn: false });
+   const truck = sim.addParked(new Point(t.world.roadWidth / 4, -800), 0, { width: 34, height: 92, hazardLights: true });
+   return { ...t, truck };
+}
+
+// Drive around the truck: out into the other lane, past it, and back
+function passTruck(car, coach, truck, { signal = true, look = true } = {}) {
+   car.controls.forward = true;
+   drive(car, coach, () => car.y < truck.y + 260, 2000, [truck]);
+   if (signal) car.controls.signal = "left";
+   if (look) {
+      car.controls.lookCount = (car.controls.lookCount || 0) + 1;
+      car.controls.looked = "left";
+   }
+   drive(car, coach, () => false, 10, [truck]);
+   car.x = -car.x; // into the other lane (as if steered there)
+   drive(car, coach, () => car.y < truck.y - 150, 2000, [truck]);
+   car.controls.signal = signal ? "right" : null;
+   drive(car, coach, () => false, 10, [truck]);
+   car.x = -car.x; // and back
+   drive(car, coach, () => false, 30, [truck]);
+}
+
+test("passing a parked truck with a signal and a blind-spot check is a clean pass, not driving on the wrong side", () => {
+   const { world, truck } = truckAhead();
+   const car = studentCar(world, -100);
+   const coach = new DrivingCoach(world, car);
+   passTruck(car, coach, truck);
+   assert.equal(coach.events.map((e) => e.rule).join(), "clean_pass");
+});
+
+test("passing without signaling or checking the blind spot is marked down", () => {
+   const { world, truck } = truckAhead();
+   const car = studentCar(world, -100);
+   const coach = new DrivingCoach(world, car);
+   passTruck(car, coach, truck, { signal: false, look: false });
+   assert.equal(coach.events.map((e) => e.rule).join(), "pass_no_signal,no_blind_spot_check,pass_return_signal");
+});
+
+test("pulling over and stopping for an ambulance is praised; carrying on isn't", () => {
+   for (const stop of [true, false]) {
+      const { world } = tJunction();
+      const car = studentCar(world, -100);
+      const coach = new DrivingCoach(world, car);
+      // an ambulance coming south down the other lane, siren on
+      const ambulance = new Car(-world.roadWidth / 4, -900, 32, 62, "DUMMY", Math.PI, 3);
+      ambulance.siren = true;
+      ambulance.speed = 3;
+      if (stop) {
+         car.x = world.roadWidth / 2 - 22; // at the curb
+      } else {
+         car.speed = 1.5;
+         car.controls.forward = true;
+      }
+      for (let i = 0; i < 400 && !coach.events.length; i++) {
+         car.update([], []);
+         ambulance.y += 3;
+         coach.update([ambulance]);
+      }
+      assert.equal(coach.events.map((e) => e.rule).join(), stop ? "yielded_emergency" : "emergency_yield");
+   }
+});
+
+test("traffic drives around a parked truck when the other lane is clear", () => {
+   const { world, truck } = truckAhead();
+   const network = new TrafficNetwork(world);
+   const edge = network.edges.find((e) => e.from.y == 0 && e.to.y == -1500);
+   const car = new TrafficCar(network, edge, 0.1);
+   let passed = false;
+   for (let i = 0; i < 1500 && !car.lost; i++) {
+      car.update([truck]);
+      assert.ok(!polysIntersectApp(car.polygon, truck.polygon), "never touches the truck");
+      if (car.y < truck.y - 100) passed = true;
+   }
+   assert.ok(passed, "got past it");
+});
+
+test("a car's analog controls (a game controller) steer and brake gradually", () => {
+   const car = new Car(0, 0, 30, 50, "DUMMY", 0, 3);
+   car.controls.forward = false;
+   car.controls.throttle = 0.5;
+   car.controls.brake = 0;
+   car.controls.steer = 0;
+   for (let i = 0; i < 10; i++) car.update([], []);
+   const halfGas = car.speed;
+   const full = new Car(0, 0, 30, 50, "DUMMY", 0, 3);
+   full.controls.forward = true;
+   for (let i = 0; i < 10; i++) full.update([], []);
+   assert.ok(halfGas > 0 && halfGas < full.speed * 0.7, "half the pedal, less speed: " + halfGas + " vs " + full.speed);
+   car.controls.steer = 0.5;
+   const before = car.angle;
+   car.update([], []);
+   assert.ok(car.angle > before, "steers left");
 });

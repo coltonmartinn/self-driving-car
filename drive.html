@@ -53,6 +53,7 @@
 
             <div id="dash" class="hud hud-panel">
                <div class="speedo" id="speedo"><b id="speedValue">0</b><span>MPH</span></div>
+               <div class="school-sign" id="schoolSign" hidden title="School zone">SCHOOL</div>
                <div class="limit-sign" title="Speed limit">SPEED<br>LIMIT<b id="limitValue">25</b></div>
                <div class="signals" aria-label="Turn signals">
                   <span id="signalLeft">◀</span><span id="signalRight">▶</span>
@@ -60,16 +61,25 @@
             </div>
 
             <div id="toasts" class="hud" aria-live="polite"></div>
+            <!-- what the demo driver is thinking, like subtitles -->
+            <div id="caption" class="hud" aria-live="polite" hidden><span>🗣️</span><div><b id="captionTitle"></b><small id="captionTip"></small></div></div>
 
             <div id="touchLeft" class="hud touch-controls">
-               <button data-control="left" aria-label="Steer left">◀</button>
-               <button data-control="right" aria-label="Steer right">▶</button>
+               <div class="touch-group look-row">
+                  <button class="small" onclick="controls.lookOver('left')" aria-label="Look over your left shoulder">👀 L</button>
+                  <button class="small" onclick="controls.lookOver('right')" aria-label="Look over your right shoulder">R 👀</button>
+               </div>
+               <div class="touch-group">
+                  <button data-control="left" aria-label="Steer left">◀</button>
+                  <button data-control="right" aria-label="Steer right">▶</button>
+               </div>
             </div>
             <div id="touchRight" class="hud touch-controls">
                <div class="touch-group column">
                   <button class="small" onclick="controls.toggleSignal('left')" aria-label="Left turn signal">⬅️</button>
                   <button class="small" onclick="controls.toggleSignal('right')" aria-label="Right turn signal">➡️</button>
                </div>
+
                <button class="pedal brake" data-control="reverse" aria-label="Brake">🛑</button>
                <button class="pedal" data-control="forward" aria-label="Gas">⬆️</button>
             </div>
@@ -134,6 +144,8 @@
                   <span><kbd>S</kbd> <kbd>↓</kbd> brake</span>
                   <span><kbd>A</kbd> <kbd>D</kbd> <kbd>←</kbd> <kbd>→</kbd> steer</span>
                   <span><kbd>Q</kbd> <kbd>E</kbd> turn signals</span>
+                  <span><kbd>Z</kbd> <kbd>C</kbd> look over your shoulder</span>
+                  <span>🎮 controller or wheel works too</span>
                   <span><kbd>Esc</kbd> pause</span>
                </div>
                <p class="muted" id="introLimit"></p>
@@ -306,6 +318,10 @@
       let stillFrames = 0;
       let recorder = null; // the drive, for the replay
       let pilot = null; // the demo driver, in a "Show me" drive
+      let extras = { zones: [], added: [] }; // a lesson's school zone, extra crosswalk
+      let nextAmbulance = Infinity; // coach frame when the next ambulance comes
+      let ambulances = 0;
+      let lookFx = null; // { side, until }: a glance over the shoulder, shown briefly
       // the replay: position (a snapshot index), and stand-in cars to draw
       const replay = { pos: 0, playing: true, speed: 1, marks: [], ghosts: [], player: null, saved: null, shown: -1 };
       const lightCanvas = document.createElement("canvas"); // night: where light falls
@@ -333,6 +349,15 @@
             if (state == "driving") pause();
             else if (state == "paused") resume();
          }
+      });
+      controls.onAction = (action) => {
+         if (action == "pause" && state == "driving") pause();
+         else if (action == "pause" && state == "paused") resume();
+      };
+      window.addEventListener("gamepadconnected", (evt) => {
+         if (state == "driving") toast({ severity: "info", title: "🎮 Controller connected", tip: "Steer with the stick or wheel, RT gas, LT brake, bumpers signal, D-pad looks over a shoulder." }, 5000);
+         else if (state == "intro") introKeys.style.display = "flex";
+         console.log("controller:", evt.gamepad.id);
       });
       document.addEventListener("visibilitychange", () => {
          if (document.hidden && state == "driving") pause();
@@ -453,8 +478,20 @@
          }
       }
 
+      // Take away what a lesson added to the world (an extra crosswalk, parked trucks)
+      function clearExtras() {
+         if (world) world.markings = world.markings.filter((m) => !extras.added.includes(m));
+         extras = { zones: [], added: [] };
+         if (sim) {
+            sim.parked = [];
+            world.parked = [];
+         }
+         sounds.siren(0);
+      }
+
       function showPicker() {
          state = "picker";
+         clearExtras();
          if (sim) sim.clearTrip();
          if (world) world.crowd = null;
          hud.style.display = "none";
@@ -533,7 +570,8 @@
          const names = {
             crash: "for crashes", ran_stop: "stop signs", red_light: "red lights", speeding: "speed",
             tailgating: "following distance", no_signal: "turn signals", wrong_side: "lane position",
-            pedestrian_yield: "crosswalks",
+            pedestrian_yield: "crosswalks", school_zone_speeding: "school zones", no_blind_spot_check: "blind spot checks",
+            unsafe_pass: "safe passing", emergency_yield: "pulling over for sirens",
          };
          const list = rules.filter((r) => names[r]).map((r) => names[r]);
          return list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
@@ -565,11 +603,17 @@
                return;
             }
          }
+         clearExtras();
          sim.startGeneration();
          car = DrivingSchool.setUpStudentCar(sim.cars[0], lesson);
+         extras = DrivingSchool.setUpLesson(sim, lesson);
          coach = new DrivingCoach(world, car, {
-            speedLimit: lesson.speedLimit, rules: lesson.rules, followSeconds: lesson.followSeconds || 2,
+            speedLimit: lesson.speedLimit, rules: lesson.rules, followSeconds: lesson.followSeconds || 2, zones: extras.zones,
          });
+         nextAmbulance = lesson.emergency ? 600 : Infinity;
+         ambulances = 0;
+         lookFx = null;
+         caption.hidden = true;
          hazards = lesson.hazards ? new Hazards(sim) : null;
          parkingSpot = lesson.pullover ? DrivingSchool.parkingSpotOn(sim.trip.route, world) : null;
          pilot = demo ? new Autopilot({ sim, car, coach, controls, lesson, parkingSpot }) : null;
@@ -636,13 +680,14 @@
       function animate() {
          if (world && sim) {
             if (state == "driving") {
+               if (!pilot) controls.pollGamepad();
+               if (coach.frame >= nextAmbulance) dispatchAmbulance();
                if (pilot) {
                   const line = pilot.update(turns);
-                  if (line) toast(line, 4500);
+                  if (line) say(line);
                }
                sim.step();
-               const others = sim.crowd ? [...sim.traffic, ...sim.crowd.people] : sim.traffic;
-               for (const event of coach.update(others)) {
+               for (const event of coach.update(sim.others)) {
                   toast(event);
                }
                if (parkingSpot) checkPullOver();
@@ -661,13 +706,17 @@
                   }
                }
                checkRoute();
+               checkLook();
+               const siren = sim.traffic.filter((t) => t.siren).reduce((d, t) => Math.min(d, distance(t, car)), Infinity);
+               sounds.siren(Math.max(0, 1 - siren / 1400));
                recorder.capture({
                   coachFrame: coach.frame, worldFrame: world.frameCount, car,
-                  traffic: sim.traffic, people: sim.crowd ? sim.crowd.people : [], route: sim.trip.route,
+                  traffic: [...sim.parked, ...sim.traffic], people: sim.crowd ? sim.crowd.people : [], route: sim.trip.route,
                });
                followCar(car);
                updateHud();
             } else if (state == "replay") {
+               sounds.siren(0);
                stepReplay();
             } else if (state != "paused" && state != "report") {
                idle();
@@ -687,6 +736,39 @@
             car.arrived = true;
             car.damaged = true; // parked: the drive is over
          }
+      }
+
+      // An ambulance, siren on, along the route (two in a drive, at most)
+      function dispatchAmbulance() {
+         if (DrivingSchool.spawnAmbulance(sim, car)) {
+            ambulances++;
+            nextAmbulance = ambulances < 2 ? coach.frame + 1500 : Infinity;
+            if (!pilot) toast({ severity: "info", title: "🚨 You hear a siren…", tip: "" }, 3000);
+         } else {
+            nextAmbulance = coach.frame + 60; // try again in a second
+         }
+      }
+
+      // A glance over the shoulder: show the blind spot, and anyone in it
+      function checkLook() {
+         if (controls.lookCount != checkLook.seen) {
+            checkLook.seen = controls.lookCount;
+            if (controls.looked) {
+               lookFx = { side: controls.looked, until: coach.frame + 50 };
+               const someone = sim.traffic.find((t) => inBlindSpot(t, controls.looked));
+               if (someone) toast({ severity: "info", title: "🚗 Car in your " + controls.looked + " blind spot!", tip: "Wait for it to pass before moving over." }, 3000);
+            }
+         }
+         if (lookFx && coach.frame > lookFx.until) lookFx = null;
+      }
+
+      // Beside and just behind the car, where mirrors can't see
+      function inBlindSpot(other, side) {
+         const heading = new Point(-Math.sin(car.angle), -Math.cos(car.angle));
+         const rel = subtract(other, car);
+         const along = dot(rel, heading);
+         const lateral = dot(rel, perpendicular(heading)); // + = right
+         return along > -140 && along < 20 && (side == "right" ? lateral : -lateral) > 20 && Math.abs(lateral) < 120;
       }
 
       // Missed a turn? Not a safety mistake: plan a new route, like a GPS
@@ -839,6 +921,8 @@
          ghost.damaged = p.damaged;
          ghost.arrived = p.arrived;
          ghost.siren = p.siren;
+         ghost.hazardLights = p.hazard;
+         ghost.draw = p.siren ? EmergencyVehicle.prototype.draw : Car.prototype.draw;
          ghost.controls.forward = false;
          ghost.controls.reverse = p.braking;
          ghost.controls.signal = p.signal;
@@ -889,12 +973,90 @@
          ctx.translate(-camera.x, -camera.y);
          const view = new Point(camera.x, camera.y);
          world.draw(ctx, view, false, Math.hypot(w, h) * camera.zoom + 300);
+         if (driving) {
+            for (const zone of extras.zones) drawZone(zone);
+         }
          if (driving && me) {
+            if (lookFx && state == "driving") drawLook(lookFx.side);
             me.draw(ctx); // on top, so tall buildings never hide you
          }
          const conditions = driving && lesson && lesson.conditions;
          if (conditions && conditions.night) drawNight(view, me);
          if (conditions && conditions.rain) drawRain(!conditions.night);
+      }
+
+      // ---------- school zones and blind spots ----------
+
+      // A tinted stretch of road, SCHOOL painted where it starts, and signs
+      // at both ends
+      function drawZone(zone) {
+         const r = zone.route;
+         ctx.save();
+         ctx.strokeStyle = "rgba(255, 214, 0, 0.13)";
+         ctx.lineWidth = world.roadWidth;
+         ctx.lineJoin = "round";
+         ctx.beginPath();
+         r.points.forEach((p, i) => (i == 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+         ctx.stroke();
+         const paint = (at, text, size) => {
+            const dir = DrivingSchool.directionAt(r, at);
+            const p = add(r.pointAt(at), scale(perpendicular(dir), world.roadWidth / 4));
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(angle(dir) + Math.PI / 2);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+            ctx.font = "800 " + size + "px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.scale(1, 1.8); // stretched, like real road paint
+            ctx.fillText(text, 0, 0);
+            ctx.restore();
+         };
+         paint(40, "SCHOOL", 17);
+         const sign = (at, lines, color) => {
+            const dir = DrivingSchool.directionAt(r, Math.max(1, Math.min(r.length - 1, at)));
+            const p = add(r.pointAt(at), scale(perpendicular(dir), world.roadWidth / 2 + 26));
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(-camera.angle); // face the viewer
+            ctx.fillStyle = color;
+            ctx.strokeStyle = "#111";
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(0, -24);
+            ctx.lineTo(20, -8);
+            ctx.lineTo(20, 20);
+            ctx.lineTo(-20, 20);
+            ctx.lineTo(-20, -8);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = "#111";
+            ctx.font = "800 9px Arial";
+            ctx.textAlign = "center";
+            lines.forEach((line, i) => ctx.fillText(line, 0, 2 + i * 10 - (lines.length - 1) * 5));
+            ctx.restore();
+         };
+         sign(0, ["SCHOOL", zone.limit + " MPH"], "#e6f238");
+         sign(r.length, ["END", "SCHOOL", "ZONE"], "#ffffff");
+         ctx.restore();
+      }
+
+      // The blind spot you just checked, red if someone's in it
+      function drawLook(side) {
+         const heading = new Point(-Math.sin(car.angle), -Math.cos(car.angle));
+         const right = perpendicular(heading);
+         const s = side == "right" ? 1 : -1;
+         const busy = sim.traffic.some((t) => inBlindSpot(t, side));
+         const at = (along, lateral) => add(car, add(scale(heading, along), scale(right, lateral * s)));
+         const pts = [at(10, 18), at(-150, 30), at(-150, 115), at(10, 70)];
+         ctx.save();
+         ctx.fillStyle = busy ? "rgba(230, 40, 40, 0.28)" : "rgba(80, 200, 120, 0.22)";
+         ctx.beginPath();
+         pts.forEach((p, i) => (i == 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+         ctx.closePath();
+         ctx.fill();
+         ctx.restore();
       }
 
       // ---------- night and rain ----------
@@ -997,8 +1159,11 @@
 
       function updateHud() {
          const mph = Math.round(DrivingCoach.mph(car.speed));
+         const limit = coach.currentLimit;
          speedValue.textContent = mph;
-         speedo.classList.toggle("over", mph > lesson.speedLimit + 3);
+         speedo.classList.toggle("over", mph > limit + 3);
+         limitValue.textContent = limit;
+         schoolSign.hidden = limit == lesson.speedLimit;
 
          const blinkOn = Math.floor(Date.now() / 350) % 2 == 0;
          sounds.signal(!!controls.signal && blinkOn);
@@ -1040,6 +1205,18 @@
          uturn: svg("<path d='M28 38V18a8 8 0 0 0-16 0v16'/><path d='M5 27l7 8 7-8'/>"),
          arrive: "<span>🏁</span>",
       };
+
+      // The demo driver's words, as a caption under the directions
+      function say(line) {
+         captionTitle.textContent = line.title;
+         captionTip.textContent = line.tip || "";
+         caption.hidden = false;
+         caption.classList.remove("fresh");
+         void caption.offsetWidth; // restart the animation
+         caption.classList.add("fresh");
+         clearTimeout(say.timer);
+         say.timer = setTimeout(() => (caption.hidden = true), 5500);
+      }
 
       function toast(event, ms) {
          const icons = { good: "✅", minor: "⚠️", major: "⛔", critical: "❌", info: "👋", demo: "🗣️" };

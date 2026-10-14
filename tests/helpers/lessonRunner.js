@@ -13,7 +13,11 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
    DrivingSchool.addCrosswalks(world);
    world.lightTiming = { green: 8, yellow: 3 };
    const lesson = LESSONS.find((l) => l.id == lessonId);
-   const controls = { forward: false, reverse: false, left: false, right: false, signal: null, cancelSignal() { this.signal = null; } };
+   const controls = {
+      forward: false, reverse: false, left: false, right: false, signal: null, looked: null, lookCount: 0,
+      cancelSignal() { this.signal = null; },
+      lookOver(side) { this.looked = side; this.lookCount++; },
+   };
    const limit = lesson.speedLimit / DrivingCoach.MPH_PER_UNIT;
    const pace = lesson.id == "following" ? [0.6, 0.75] : [0.8, 1];
    const sim = new Simulation(world, {
@@ -24,7 +28,12 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
    if (!DrivingSchool.pickTrip(sim, lesson.route, 15)) throw new Error("no trip");
    sim.startGeneration();
    const car = DrivingSchool.setUpStudentCar(sim.cars[0], lesson);
-   const coach = new DrivingCoach(world, car, { speedLimit: lesson.speedLimit, rules: lesson.rules, followSeconds: lesson.followSeconds || 2 });
+   const extras = DrivingSchool.setUpLesson(sim, lesson);
+   const coach = new DrivingCoach(world, car, {
+      speedLimit: lesson.speedLimit, rules: lesson.rules, followSeconds: lesson.followSeconds || 2, zones: extras.zones,
+   });
+   let nextAmbulance = lesson.emergency ? 600 : Infinity;
+   let ambulances = 0;
    const spot = lesson.pullover ? DrivingSchool.parkingSpotOn(sim.trip.route, world) : null;
    const pilot = new Autopilot({ sim, car, coach, controls, lesson, parkingSpot: spot });
    const hazards = lesson.hazards ? new Hazards(sim) : null;
@@ -33,10 +42,18 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
    let still = 0;
    let frame = 0;
    for (; frame < maxFrames && !car.damaged && !car.arrived; frame++) {
+      if (coach.frame >= nextAmbulance) {
+         if (DrivingSchool.spawnAmbulance(sim, car)) {
+            ambulances++;
+            nextAmbulance = ambulances < 2 ? coach.frame + 1500 : Infinity;
+         } else {
+            nextAmbulance = coach.frame + 60;
+         }
+      }
       const line = pilot.update(turns);
       if (line) said.push(line.title);
       sim.step();
-      coach.update(sim.crowd ? [...sim.traffic, ...sim.crowd.people] : sim.traffic);
+      coach.update(sim.others);
       if (hazards) {
          const h = hazards.update(car);
          if (h && h.type == "done" && h.handled) coach.report("hazard_avoided");
@@ -49,7 +66,7 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
          }
       }
    }
-   return { app, sim, car, coach, said, frame, hazards };
+   return { app, sim, car, coach, said, frame, hazards, extras, ambulances };
 }
 
 module.exports = { runLesson };

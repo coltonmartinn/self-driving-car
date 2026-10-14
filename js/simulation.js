@@ -22,7 +22,7 @@ class Simulation {
    constructor(world, options = {}) {
       this.options = { ...Simulation.DEFAULTS, ...options };
       this.world = world;
-      this.network = new TrafficNetwork(world);
+      this.network = new TrafficNetwork(world); // (DrivingSchool spawns an ambulance on it)
       this.adjacency = Pathfinder.buildAdjacency(world.graph);
 
       // index the road edges so each car only checks the ones near it
@@ -38,6 +38,7 @@ class Simulation {
 
       this.cars = [];
       this.traffic = [];
+      this.parked = []; // vehicles stopped at the side for good (see addParked)
       this.crowd = null; // pedestrians, when options.pedestrians is on
       this.bestCar = null;
       this.frame = 0;
@@ -49,6 +50,11 @@ class Simulation {
 
    get alive() {
       return this.cars.filter((c) => !c.damaged).length;
+   }
+
+   // Everything a driver must not hit: traffic, parked vehicles, people
+   get others() {
+      return [...this.traffic, ...this.parked, ...(this.crowd ? this.crowd.people : [])];
    }
 
    get arrived() {
@@ -109,6 +115,8 @@ class Simulation {
          this.cars.push(car);
       }
       this.traffic = this.options.trafficOn && !this.isEmpty ? this.#spawnTraffic() : [];
+      this.parked = [];
+      this.world.parked = this.parked;
       this.crowd = this.options.pedestrians ? new Crowd(this.world) : null;
       this.world.crowd = this.crowd;
       this.bestCar = this.cars[0];
@@ -156,9 +164,10 @@ class Simulation {
       // keeps its distance from a human driver
       const people = this.crowd ? this.crowd.people : [];
       if (this.crowd) {
-         this.crowd.update(this.bestCar, [...this.traffic, ...this.cars], this.trip ? this.trip.route : null);
+         this.crowd.update(this.bestCar, [...this.traffic, ...this.parked, ...this.cars], this.trip ? this.trip.route : null);
       }
-      const obstacles = people.length > 0 ? [...this.traffic, ...people] : this.traffic;
+      const vehicles = this.parked.length > 0 ? [...this.traffic, ...this.parked] : this.traffic;
+      const obstacles = people.length > 0 ? [...vehicles, ...people] : vehicles;
       const others = this.manual ? [...obstacles, ...this.cars] : obstacles;
       for (const car of this.traffic) {
          car.update(others);
@@ -318,6 +327,18 @@ class Simulation {
          }
       }
       return null;
+   }
+
+   // A vehicle stopped for good at `point`, facing `heading` (radians),
+   // e.g. a delivery truck double-parked in the lane, or cars at the curb
+   addParked(point, angle, { width = 30, height = 50, color = "#9aa3ad", hazardLights = false } = {}) {
+      const car = new Car(point.x, point.y, width, height, "DUMMY", angle, 0, color);
+      car.controls.forward = false;
+      car.isParked = true;
+      car.hazardLights = hazardLights;
+      this.parked.push(car);
+      this.world.parked = this.parked;
+      return car;
    }
 
    // ---------- traffic ----------

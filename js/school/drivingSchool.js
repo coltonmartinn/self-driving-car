@@ -241,31 +241,169 @@ const DrivingSchool = {
       return best ? best.dest : null;
    },
 
+   // The route's direction at `at` (a distance along it)
+   directionAt(route, at) {
+      return normalize(subtract(route.pointAt(at + 10), route.pointAt(at - 10)));
+   },
+
+   // Is the route straight for `reach` each way from `at`, away from
+   // junctions, crosswalks and signs (and on a two-way road, if asked)?
+   // That's where a car can pull over or be parked.
+   straightAt(route, world, at, reach = 90, twoWay = false) {
+      const rw = world.roadWidth;
+      const turnBetween = (a, b) => Math.abs(Math.atan2(a.x * b.y - a.y * b.x, dot(a, b)));
+      const p = route.pointAt(at);
+      const dir = DrivingSchool.directionAt(route, at);
+      if (turnBetween(DrivingSchool.directionAt(route, at - reach), dir) > 0.12 ||
+         turnBetween(dir, DrivingSchool.directionAt(route, at + reach)) > 0.12) {
+         return false;
+      }
+      const seg = twoWay ? getNearestSegment(p, world.graph.segments) : null;
+      if (seg && seg.oneWay) {
+         return false;
+      }
+      const markings = world.markings.filter((m) => m instanceof Crossing || m instanceof Stop || m instanceof Light || m instanceof Yield);
+      return world.intersections.every((j) => distance(j, p) > rw * 1.6) &&
+         markings.every((m) => distance(m.center, p) > rw * 1.2);
+   },
+
+   // The first place from `from` back to `to` (distances along the route)
+   // where straightAt holds. If there's none: the place farthest from any
+   // junction, crosswalk or sign.
+   findStraight(route, world, from, to, reach = 90, twoWay = false) {
+      for (let at = from; at > to; at -= 20) {
+         if (DrivingSchool.straightAt(route, world, at, reach, twoWay)) {
+            return at;
+         }
+      }
+      const markings = world.markings.filter((m) => m instanceof Crossing || m instanceof Stop || m instanceof Light || m instanceof Yield);
+      const clearance = (at) => {
+         const p = route.pointAt(at);
+         return Math.min(...world.intersections.map((j) => distance(j, p)), ...markings.map((m) => distance(m.center, p)));
+      };
+      let best = from;
+      for (let at = from; at > to; at -= 20) {
+         if (clearance(at) > clearance(best)) best = at;
+      }
+      return best;
+   },
+
    // A marked space by the curb, near the end of the route, on a straight
    // stretch away from junctions, crosswalks and signs (where real drivers
    // can pull over)
    parkingSpotOn(route, world) {
       const rw = world.roadWidth;
-      const dirAt = (at) => normalize(subtract(route.pointAt(at + 10), route.pointAt(at - 10)));
-      const turnBetween = (a, b) => Math.abs(Math.atan2(a.x * b.y - a.y * b.x, dot(a, b)));
-      const markings = world.markings.filter((m) => m instanceof Crossing || m instanceof Stop || m instanceof Light || m instanceof Yield);
-      const fits = (at) => {
-         const p = route.pointAt(at);
-         const dir = dirAt(at);
-         return turnBetween(dirAt(at - 90), dir) < 0.12 && turnBetween(dir, dirAt(at + 90)) < 0.12 &&
-            world.intersections.every((j) => distance(j, p) > rw * 1.6) &&
-            markings.every((m) => distance(m.center, p) > rw * 1.2);
-      };
-      let at = Math.max(route.length * 0.6, route.length - 120);
-      for (let tryAt = at; tryAt > Math.max(150, route.length * 0.4); tryAt -= 20) {
-         if (fits(tryAt)) {
-            at = tryAt;
-            break;
-         }
-      }
-      const dir = dirAt(at);
+      const start = Math.max(route.length * 0.6, route.length - 120);
+      const at = DrivingSchool.findStraight(route, world, start, Math.max(150, route.length * 0.4));
+      const dir = DrivingSchool.directionAt(route, at);
       const center = add(route.pointAt(at), scale(perpendicular(dir), rw / 2 - 24));
       return new Parking(center, dir, 44, 90);
+   },
+
+   // Delivery trucks double-parked in the student's lane (hazard lights on),
+   // to pass. Returns the trucks.
+   addBlockers(sim, route, count = 2) {
+      const trucks = [];
+      for (let i = 0; i < count; i++) {
+         const want = route.length * (0.3 + (0.45 * i) / Math.max(1, count - 1 || 1));
+         const at = DrivingSchool.findStraight(route, sim.world, want, want - 500, 160, true);
+         if (!DrivingSchool.straightAt(route, sim.world, at, 160, true) || at < 500 || at > route.length - 300) continue;
+         if (trucks.some((t) => Math.abs(t.at - at) < 600)) continue;
+         const dir = DrivingSchool.directionAt(route, at);
+         const point = add(route.pointAt(at), scale(perpendicular(dir), sim.world.roadWidth / 4));
+         const truck = sim.addParked(point, -angle(dir) - Math.PI / 2, {
+            width: 34, height: 92, color: "#ece6d8", hazardLights: true,
+         });
+         truck.at = at;
+         trucks.push(truck);
+      }
+      return trucks;
+   },
+
+   // An ambulance coming the other way along the student's route, siren on,
+   // starting 450-1300 units ahead on a two-way street. Returns it (already
+   // in the traffic), or null if the road ahead won't do (yet).
+   spawnAmbulance(sim, car) {
+      const route = sim.trip && sim.trip.route;
+      if (!route) return null;
+      const progress = route.locate(car, car.routeIndex || 0).progress;
+      const unitsPerMph = 1 / DrivingCoach.MPH_PER_UNIT;
+      for (let at = Math.min(progress + 1100, route.length - 50); at > progress + 450; at -= 50) {
+         let i = route.points.length - 2;
+         while (i > 0 && route.cumulative[i] > at) i--;
+         const from = route.points[i + 1];
+         const to = route.points[i];
+         const edge = sim.network.edges.find((e) => e.from == from && e.to == to);
+         if (!edge) continue; // a one-way street
+         const t = 1 - (at - route.cumulative[i]) / Math.max(1, route.cumulative[i + 1] - route.cumulative[i]);
+         const ambulance = new EmergencyVehicle(sim.network, edge, Math.max(0, Math.min(1, t)), 38 * unitsPerMph);
+         ambulance.plan = route.points.slice(0, i).reverse(); // back along the route, past the student
+         sim.traffic.push(ambulance);
+         sim.world.traffic = sim.traffic;
+         return ambulance;
+      }
+      // one-way streets: it comes up from behind instead, and passes
+      for (let at = progress - 600; at > progress - 1200 && at > 0; at -= 50) {
+         let i = route.points.length - 2;
+         while (i > 0 && route.cumulative[i] > at) i--;
+         const edge = sim.network.edges.find((e) => e.from == route.points[i] && e.to == route.points[i + 1]);
+         if (!edge) continue;
+         const t = (at - route.cumulative[i]) / Math.max(1, route.cumulative[i + 1] - route.cumulative[i]);
+         const ambulance = new EmergencyVehicle(sim.network, edge, Math.max(0, Math.min(1, t)), 38 * unitsPerMph);
+         ambulance.plan = route.points.slice(i + 2);
+         sim.traffic.push(ambulance);
+         sim.world.traffic = sim.traffic;
+         return ambulance;
+      }
+      return null;
+   },
+
+   // A school zone on part of the route (limit 15 mph), with a crosswalk in
+   // the middle if there isn't one. Returns { zone, crossing (added, or null) }.
+   schoolZoneOn(route, world, limit = 15) {
+      const length = Math.min(900, route.length * 0.4);
+      const from = Math.max(250, route.length * 0.3);
+      const to = Math.min(route.length - 150, from + length);
+      const points = [route.pointAt(from)];
+      for (let i = 0; i < route.points.length; i++) {
+         if (route.cumulative[i] > from && route.cumulative[i] < to) points.push(route.points[i]);
+      }
+      points.push(route.pointAt(to));
+      const zone = { route: new Route(points), limit, kind: "school", from, to };
+      const inZone = world.markings.some((m) => m instanceof Crossing && zone.route.locate(m.center, 0, points.length).distance < world.roadWidth / 2 + 10);
+      let crossing = null;
+      if (!inZone) {
+         const mid = DrivingSchool.findStraight(route, world, (from + to) / 2, from + 100, 60);
+         const dir = DrivingSchool.directionAt(route, mid);
+         crossing = new Crossing(route.pointAt(mid), dir, world.roadWidth, world.roadWidth / 2);
+      }
+      return { zone, crossing };
+   },
+
+
+   // A lesson's extras, after sim.startGeneration(): a school zone (with a
+   // crosswalk if it needs one), delivery trucks to pass. Returns the zones
+   // (for the coach) and the markings added (to take away afterwards).
+   setUpLesson(sim, lesson) {
+      const route = sim.trip.route;
+      const zones = [];
+      const added = [];
+      if (lesson.schoolZone) {
+         const { zone, crossing } = DrivingSchool.schoolZoneOn(route, sim.world);
+         zones.push(zone);
+         if (crossing) {
+            sim.world.markings.push(crossing);
+            added.push(crossing);
+            if (sim.crowd) {
+               sim.crowd.crossings.push(crossing);
+               sim.crowd.route = null; // so it sees the new crosswalk on the route
+            }
+         }
+      }
+      if (lesson.blockers) {
+         DrivingSchool.addBlockers(sim, route, lesson.blockers);
+      }
+      return { zones, added };
    },
 
    // How a student's car handles: gentle like a real car, a little faster
