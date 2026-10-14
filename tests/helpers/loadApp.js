@@ -57,7 +57,7 @@ const EXPORTS = [
    "NeuralNetwork", "Level", "TrafficCar", "TrafficNetwork", "EmergencyVehicle", "Pathfinder", "Route", "MinHeap", "Genetics", "Simulation", "Places",
    "DrivingSchool", "DrivingCoach", "LESSONS", "Pedestrian", "Crowd", "Progress", "Quiz", "QUIZ_BANK", "SIGNS", "Hazards", "PracticeLog", "Badges", "BADGES", "DriveRecorder", "Autopilot", "PhoneBuzz",
    "getIntersection", "distance", "average", "add", "subtract", "scale",
-   "normalize", "angle", "lerp", "polysIntersect", "getNearestPoint", "perpendicular",
+   "normalize", "angle", "lerp", "polysIntersect", "getNearestPoint", "perpendicular", "dot",
 ];
 
 // seed: makes Math.random (inside the app only) repeatable, for experiments

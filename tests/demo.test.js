@@ -55,3 +55,9 @@ test("the demo driver pulls over for an ambulance, coming towards it or from beh
 test("the demo driver leaves the phone alone", () => {
    clean("phone", "beverly-hills", 1);
 });
+
+test("the demo driver parallel parks, backing in on two arcs", () => {
+   const r = clean("parallel", "times-square", 1);
+   assert.ok(r.coach.events.some((e) => e.rule == "parallel_parked"));
+   assert.ok(r.coach.stats.moves >= 1 && r.coach.stats.moves <= 3, "moves " + r.coach.stats.moves);
+});

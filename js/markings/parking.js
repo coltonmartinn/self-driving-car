@@ -3,6 +3,7 @@ class Parking extends Marking {
       super(center, directionVector, width, height);
       this.borders = [this.poly.segments[0], this.poly.segments[2]];
       this.type = "parking";
+      this.parallel = false; // a space between two parked cars (Driving School)
    }
 
    draw(ctx) {

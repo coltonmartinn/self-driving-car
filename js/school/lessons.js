@@ -117,7 +117,7 @@ const LESSONS = [
    },
    {
       id: "pullover",
-      emoji: "🅿️",
+      emoji: "⤵️",
       title: "Pulling over",
       summary: "Signal, slow down, and stop neatly at the curb.",
       learn: [
@@ -130,6 +130,22 @@ const LESSONS = [
       speedLimit: 25,
       pullover: true,
       rules: ["crash", "curb", "parked_well", "missed_spot", "crooked_park", "pullover_signal", "no_blind_spot_check", "checked_blind_spot", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
+      id: "parallel",
+      emoji: "🅿️",
+      title: "Parallel parking",
+      summary: "Back into a space between two parked cars.",
+      learn: [
+         "Signal right and stop beside the car in front of the space, about 2-3 feet out from it.",
+         "Back up slowly (hold ▼ / S) with the wheel turned right. When you're at about 45°, straighten the wheel and keep backing.",
+         "When your front clears the car ahead, turn the wheel left to swing in straight. Then pull forward a little to center up.",
+      ],
+      route: "following",
+      traffic: 4,
+      speedLimit: 25,
+      parallel: true,
+      rules: ["crash", "curb", "parallel_parked", "missed_spot", "crooked_park", "far_from_curb", "too_many_moves", "park_signal", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
    },
    {
       id: "passing",

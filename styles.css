@@ -1229,6 +1229,17 @@ body.app {
    background: #ff5a5a;
 }
 
+/* parallel parking: say when you're done */
+.park-done {
+   right: 12px;
+   bottom: 120px;
+}
+
+body.touch .park-done {
+   bottom: auto;
+   top: 160px;
+}
+
 /* the demo driver's thoughts, under the directions */
 #caption {
    top: 92px;

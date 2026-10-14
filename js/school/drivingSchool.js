@@ -300,6 +300,33 @@ const DrivingSchool = {
       return new Parking(center, dir, 44, 90);
    },
 
+   // A space between two parked cars at the curb, near the end of the
+   // route, to parallel park in. Returns the space (a Parking marking whose
+   // center is level with the parked cars, `gap` long).
+   parallelSpotOn(sim, route, gap = 96) {
+      const rw = sim.world.roadWidth;
+      const start = Math.max(route.length * 0.55, route.length - 260);
+      const end = Math.max(300, route.length * 0.35);
+      // the straightest stretch there is: long and straight if possible
+      let at = start;
+      for (const reach of [170, 130, 95]) {
+         at = DrivingSchool.findStraight(route, sim.world, start, end, reach);
+         if (DrivingSchool.straightAt(route, sim.world, at, reach)) break;
+      }
+      const dir = DrivingSchool.directionAt(route, at);
+      const side = perpendicular(dir);
+      const line = add(route.pointAt(at), scale(side, rw / 2 - 22)); // where parked cars sit
+      const heading = -angle(dir) - Math.PI / 2;
+      const colors = ["#8f9aa6", "#b5523b", "#d9c9a3", "#3e5c76"];
+      const pick = Math.floor(DrivingSchool.hash(line) * colors.length);
+      for (const s of [1, -1]) {
+         sim.addParked(add(line, scale(dir, s * (gap / 2 + 25))), heading, { color: colors[(pick + (s > 0 ? 0 : 2)) % colors.length] });
+      }
+      const spot = new Parking(line, dir, 34, gap);
+      spot.parallel = true;
+      return spot;
+   },
+
    // Delivery trucks double-parked in the student's lane (hazard lights on),
    // to pass. Returns the trucks.
    addBlockers(sim, route, count = 2) {
@@ -403,7 +430,9 @@ const DrivingSchool = {
       if (lesson.blockers) {
          DrivingSchool.addBlockers(sim, route, lesson.blockers);
       }
-      return { zones, added };
+      const spot = lesson.parallel ? DrivingSchool.parallelSpotOn(sim, route)
+         : lesson.pullover ? DrivingSchool.parkingSpotOn(route, sim.world) : null;
+      return { zones, added, spot };
    },
 
    // How a student's car handles: gentle like a real car, a little faster

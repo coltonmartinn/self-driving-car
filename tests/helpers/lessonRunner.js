@@ -22,7 +22,7 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
    const pace = lesson.id == "following" ? [0.6, 0.75] : [0.8, 1];
    const sim = new Simulation(world, {
       playerControls: controls, trafficCount: lesson.traffic, pedestrians: !!lesson.pedestrians,
-      autoArrive: !lesson.pullover, trafficSpeed: [limit * pace[0], limit * pace[1]],
+      autoArrive: !lesson.pullover && !lesson.parallel, trafficSpeed: [limit * pace[0], limit * pace[1]],
    });
    sim.manual = true;
    if (!DrivingSchool.pickTrip(sim, lesson.route, 15)) throw new Error("no trip");
@@ -35,7 +35,7 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
    const phone = lesson.phone ? new app.PhoneBuzz({ forcedFirst: false }) : null; // the demo driver ignores texts
    let nextAmbulance = lesson.emergency ? 600 : Infinity;
    let ambulances = 0;
-   const spot = lesson.pullover ? DrivingSchool.parkingSpotOn(sim.trip.route, world) : null;
+   const spot = extras.spot;
    const pilot = new Autopilot({ sim, car, coach, controls, lesson, parkingSpot: spot });
    const hazards = lesson.hazards ? new Hazards(sim) : null;
    const turns = DrivingSchool.turnsOf(sim.trip.route, DrivingSchool.junctionsOf(world));
@@ -65,8 +65,10 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
       }
       if (spot) {
          still = app.distance(car, spot.center) < 160 && Math.abs(car.speed) < 0.02 ? still + 1 : 0;
-         if (still == 60) {
-            coach.judgePullOver(spot);
+         const inside = !spot.parallel || Math.abs(app.dot(app.subtract(car, spot.center), spot.directionVector)) < spot.height / 2;
+         if (still == (spot.parallel ? 90 : 60) && inside) {
+            if (spot.parallel) coach.judgeParallelPark(spot);
+            else coach.judgePullOver(spot);
             car.arrived = true;
          }
       }

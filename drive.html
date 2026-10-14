@@ -52,7 +52,7 @@
             <div id="scoreCard" class="hud hud-panel"><b id="scoreValue">100</b><span>Score</span></div>
 
             <div id="dash" class="hud hud-panel">
-               <div class="speedo" id="speedo"><b id="speedValue">0</b><span>MPH</span></div>
+               <div class="speedo" id="speedo"><b id="speedValue">0</b><span id="gearLabel">MPH</span></div>
                <div class="school-sign" id="schoolSign" hidden title="School zone">SCHOOL</div>
                <div class="limit-sign" title="Speed limit">SPEED<br>LIMIT<b id="limitValue">25</b></div>
                <div class="signals" aria-label="Turn signals">
@@ -61,6 +61,7 @@
             </div>
 
             <div id="toasts" class="hud" aria-live="polite"></div>
+            <button id="parkDoneBtn" class="hud primary park-done" hidden onclick="checkPullOver(true)">🅿️ I'm parked</button>
             <!-- a text arriving (the Phone down lesson) -->
             <div id="phoneBanner" class="hud phone-banner" hidden role="status">
                <span class="app-icon">💬</span>
@@ -157,7 +158,7 @@
                <ul class="learn-list" id="introList"></ul>
                <div class="keys" id="introKeys">
                   <span><kbd>W</kbd> <kbd>↑</kbd> gas</span>
-                  <span><kbd>S</kbd> <kbd>↓</kbd> brake</span>
+                  <span><kbd>S</kbd> <kbd>↓</kbd> brake (hold to back up)</span>
                   <span><kbd>A</kbd> <kbd>D</kbd> <kbd>←</kbd> <kbd>→</kbd> steer</span>
                   <span><kbd>Q</kbd> <kbd>E</kbd> turn signals</span>
                   <span><kbd>Z</kbd> <kbd>C</kbd> look over your shoulder</span>
@@ -331,7 +332,7 @@
       let endReason = null;
       let offRouteFrames = 0;
       let hazards = null; // surprise events, in the Hazards lesson
-      let parkingSpot = null; // where to pull over, in the Pulling over lesson
+      let parkingSpot = null; // where to pull over or parallel park
       let stillFrames = 0;
       let recorder = null; // the drive, for the replay
       let pilot = null; // the demo driver, in a "Show me" drive
@@ -607,7 +608,7 @@
          const pace = lesson.id == "following" ? [0.6, 0.75] : [0.8, 1];
          sim.options.trafficCount = lesson.traffic;
          sim.options.pedestrians = !!lesson.pedestrians;
-         sim.options.autoArrive = !lesson.pullover;
+         sim.options.autoArrive = !lesson.pullover && !lesson.parallel;
          sim.options.trafficSpeed = [limit * pace[0], limit * pace[1]];
 
          if (sameTrip && tripDestination) {
@@ -636,7 +637,7 @@
          lookFx = null;
          caption.hidden = true;
          hazards = lesson.hazards ? new Hazards(sim) : null;
-         parkingSpot = lesson.pullover ? DrivingSchool.parkingSpotOn(sim.trip.route, world) : null;
+         parkingSpot = extras.spot;
          pilot = demo ? new Autopilot({ sim, car, coach, controls, lesson, parkingSpot }) : null;
          stillFrames = 0;
          if (parkingSpot) world.destination = parkingSpot;
@@ -751,12 +752,19 @@
       }
 
       // Pulled up and stopped near the space for a second: judge the stop
-      function checkPullOver() {
+      // (parallel parking takes a few stops to get in, so: stopped for 1.5 s
+      // inside the space, or the Done button)
+      function checkPullOver(done = false) {
          if (car.arrived || car.damaged) return;
          const near = distance(car, parkingSpot.center) < 160;
          stillFrames = near && Math.abs(car.speed) < 0.02 ? stillFrames + 1 : 0;
-         if (stillFrames == 60) {
-            for (const event of coach.judgePullOver(parkingSpot)) toast(event);
+         const inSpace = Math.abs(dot(subtract(car, parkingSpot.center), parkingSpot.directionVector)) < parkingSpot.height / 2;
+         parkDoneBtn.hidden = !parkingSpot.parallel || !near || !!pilot;
+         const ready = parkingSpot.parallel ? (stillFrames == 90 && inSpace) || (done && near) : stillFrames == 60;
+         if (ready) {
+            parkDoneBtn.hidden = true;
+            const events = parkingSpot.parallel ? coach.judgeParallelPark(parkingSpot) : coach.judgePullOver(parkingSpot);
+            for (const event of events) toast(event);
             car.arrived = true;
             car.damaged = true; // parked: the drive is over
          }
@@ -1233,6 +1241,7 @@
          const mph = Math.round(DrivingCoach.mph(car.speed));
          const limit = coach.currentLimit;
          speedValue.textContent = mph;
+         gearLabel.textContent = car.speed < -0.02 ? "MPH · R" : "MPH"; // backing up
          speedo.classList.toggle("over", mph > limit + 3);
          limitValue.textContent = limit;
          schoolSign.hidden = limit == lesson.speedLimit;
@@ -1252,7 +1261,7 @@
          const far = step.kind != "arrive" && step.distance > 2500;
          const pullOver = parkingSpot && step.kind == "arrive";
          navTitle.textContent = car.arrived ? "You've arrived" : far ? "Continue straight"
-            : pullOver ? "Pull over at the P" : titles[step.kind];
+            : pullOver ? (parkingSpot.parallel ? "Parallel park at the P" : "Pull over at the P") : titles[step.kind];
          navDistance.textContent = car.arrived ? "Nice driving!" : (far ? "for " : "in ") + formatFeet(step.distance);
          const arrow = car.arrived ? "arrive" : far ? "straight" : step.kind;
          if (navArrow.dataset.kind != arrow) {
@@ -1344,6 +1353,7 @@
                hazards && hazards.averageReaction != null ? hazards.averageReaction.toFixed(1) + " s" : "–",
                "avg reaction (most drivers: 1.5 s)",
             ]
+            : lesson.id == "parallel" ? [coach.stats.moves + 1, "moves to park"]
             : lesson.id == "stops" ? [s.fullStops, "full stops"]
                : lesson.id == "pedestrians" ? [s.praise.filter((e) => e.rule == "yielded_pedestrian").length, "people yielded to"]
                   : [s.signaledTurns + "/" + s.turns, "turns signaled"],

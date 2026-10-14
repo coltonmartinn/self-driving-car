@@ -62,6 +62,16 @@ class Autopilot {
       const route = this.sim.trip.route;
       const loc = route.locate(car, car.routeIndex || 0);
       const heading = this.heading();
+      if (this.parkingSpot && this.parkingSpot.parallel) {
+         const spot = this.parkingSpot;
+         const ahead = dot(subtract(spot.center, car), spot.directionVector);
+         if (this.parking || (ahead < 330 && ahead > -60 && distance(spot.center, car) < 400)) {
+            const line = this.#parallelPark(spot);
+            if (line) lines.push(line);
+            this.queue.push(...lines);
+            return this.#next();
+         }
+      }
       if (this.frame == 1) {
          say("start", "Easing onto the gas", "Smooth and steady. I'll keep just under " + this.lesson.speedLimit + " mph.");
       }
@@ -272,6 +282,76 @@ class Autopilot {
       controls.reverse = car.speed > target + 0.08;
       this.queue.push(...lines);
       return this.#next();
+   }
+
+   // Parallel parking, the textbook way: pull up beside the car ahead of
+   // the space, back in on two arcs (wheel toward the curb, then away), then
+   // center up. Steps: approach, swing, back, straighten, center, done.
+   #parallelPark(spot) {
+      const car = this.car;
+      const c = this.controls;
+      const dir = spot.directionVector;
+      const side = perpendicular(dir); // towards the curb
+      const rel = subtract(car, spot.center);
+      const x = dot(rel, dir); // + = ahead of the space's middle
+      const y = dot(rel, side); // 0 = in line with the parked cars
+      const h = this.heading();
+      const tilt = Math.abs(Math.atan2(dir.x * h.y - dir.y * h.x, dot(dir, h)));
+      const R = 1 / 0.025; // the car's tightest turn (see Car)
+      // (the numbers come from a search over the maneuver with this car's
+      // physics, for the most room to spare)
+      const stopX = spot.height / 2 + 5; // a little behind the car ahead
+      const outY = -40; // about 3 feet out from the parked cars
+      const go = (speed) => {
+         // hold a speed (negative = backing up)
+         c.forward = car.speed < speed - 0.03;
+         c.reverse = car.speed > speed + 0.03;
+      };
+      let line = null;
+      const say = (key, title, tip) => {
+         if (!this.said.has(key)) {
+            this.said.set(key, this.frame);
+            line = { severity: "demo", rule: "demo", title, tip };
+         }
+      };
+      this.parking = this.parking || "approach";
+      c.left = c.right = false;
+      if (c.steer !== undefined) c.steer = null;
+
+      if (this.parking == "approach") {
+         c.signal = "right";
+         say("pp1", "Parallel parking: signal right", "Pull up beside the car in front of the space, 2-3 feet out from it.");
+         const aim = add(add(spot.center, scale(dir, x + 70)), scale(side, outY));
+         let steer = -angle(subtract(aim, car)) - Math.PI / 2 - car.angle;
+         steer = Math.atan2(Math.sin(steer), Math.cos(steer));
+         c.left = steer > 0.02;
+         c.right = steer < -0.02;
+         go(Math.max(0, Math.min(1.2, (stopX - x) / 60)));
+         if (stopX - x < 2 && Math.abs(car.speed) < 0.03) this.parking = "swing";
+      } else if (this.parking == "swing") {
+         say("pp2", "Backing up, wheel turned toward the curb", "Slowly! Watch the back of the car swing in.");
+         c.right = true;
+         go(-0.35);
+         if (tilt > 0.75) this.parking = "back";
+      } else if (this.parking == "back") {
+         say("pp3", "About 45°: straighten the wheel and keep backing", "Until the car is close enough to swing the front in.");
+         go(-0.35);
+         if (y > -6 - R * (1 - Math.cos(tilt))) this.parking = "straighten";
+      } else if (this.parking == "straighten") {
+         say("pp4", "Now turn the wheel the other way", "The front swings in and the car straightens out.");
+         c.left = true;
+         go(-0.3);
+         if (tilt < 0.03) this.parking = "center";
+      } else if (this.parking == "center") {
+         say("pp5", "Center up in the space", "Leave room in front and behind for the other cars to get out.");
+         go(x > 4 ? -0.25 : x < -4 ? 0.25 : 0);
+         if (Math.abs(x) <= 4 && Math.abs(car.speed) < 0.03) this.parking = "done";
+      } else {
+         c.signal = null;
+         go(0);
+      }
+      this.why = "parking: " + this.parking;
+      return line;
    }
 
    // A parked vehicle in our lane ahead, on the route

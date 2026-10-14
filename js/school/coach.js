@@ -73,6 +73,19 @@ class DrivingCoach {
       yielded_pedestrian: { severity: "good", title: "Stopped for a pedestrian" },
       hazard_avoided: { severity: "good", title: "Handled the hazard safely" },
       parked_well: { severity: "good", title: "Pulled over neatly" },
+      parallel_parked: { severity: "good", title: "Parallel parked!" },
+      far_from_curb: {
+         severity: "minor", title: "Parked too far from the curb",
+         tip: "End up close to the curb (within about a foot and a half), so passing cars have room.",
+      },
+      too_many_moves: {
+         severity: "minor", title: "Too many back-and-forth moves",
+         tip: "Line up about 2-3 feet from the car ahead, reverse with the wheel turned toward the curb, then straighten up. Most tests allow a few corrections.",
+      },
+      park_signal: {
+         severity: "minor", title: "Didn't signal before parking",
+         tip: "Signal right as you pull up beside the car ahead of the space, so drivers behind know you're stopping to park.",
+      },
       missed_spot: {
          severity: "major", title: "Stopped outside the spot",
          tip: "Aim to stop with the whole car inside the marked space, close to the curb.",
@@ -151,7 +164,9 @@ class DrivingCoach {
 
       this.stats = {
          distance: 0, topSpeed: 0, fullStops: 0, signaledTurns: 0, turns: 0,
+         moves: 0, // changes between driving forward and backing up
       };
+      this.lastDirection = 0;
 
       this.controls = world.markings.filter(
          (m) => m instanceof Light || m instanceof Stop || m instanceof Yield
@@ -269,6 +284,11 @@ class DrivingCoach {
       const signal = car.controls.signal || null;
       if (signal) {
          this.lastSignal = { side: signal, frame: this.frame };
+      }
+      if (Math.abs(car.speed) > 0.05) {
+         const direction = Math.sign(car.speed);
+         if (this.lastDirection && direction != this.lastDirection) this.stats.moves++;
+         this.lastDirection = direction;
       }
       const looks = car.controls.lookCount || 0;
       if (looks != this.seenLooks) {
@@ -749,6 +769,39 @@ class DrivingCoach {
          events.push(this.report("crooked_park", { detail: Math.round(off) + "° off" }));
       } else {
          events.push(this.report("parked_well"));
+      }
+      return events.filter(Boolean);
+   }
+
+   // Judges a parallel park in `spot` (the space between two parked cars)
+   judgeParallelPark(spot, movesAllowed = 7) {
+      const car = this.car;
+      const dir = spot.directionVector;
+      const rel = subtract(car, spot.center);
+      const along = dot(rel, dir);
+      const toCurb = dot(rel, perpendicular(dir)); // 0 = in line with the parked cars, + = closer to the curb
+      const heading = this.heading();
+      const off = Math.abs(Math.atan2(heading.x * dir.y - heading.y * dir.x, dot(heading, dir))) * (180 / Math.PI);
+      const events = [];
+      const inside = Math.abs(along) <= spot.height / 2 - car.height / 2 + 6 && toCurb > -spot.width / 2 - 14;
+      if (!(this.lastSignal.side == "right" && this.frame - this.lastSignal.frame < 60 * 60)) {
+         events.push(this.report("park_signal"));
+      }
+      if (!inside) {
+         events.push(this.report("missed_spot", { detail: Math.round(Math.abs(along)) + " units off the middle" }));
+         return events.filter(Boolean);
+      }
+      if (toCurb < -9) {
+         events.push(this.report("far_from_curb", { detail: Math.round((7 - toCurb) / 3.048) + " ft away" }));
+      }
+      if (off > 10) {
+         events.push(this.report("crooked_park", { detail: Math.round(off) + "° off" }));
+      }
+      if (this.stats.moves > movesAllowed) {
+         events.push(this.report("too_many_moves", { detail: this.stats.moves + " moves" }));
+      }
+      if (events.every((e) => !e)) {
+         events.push(this.report("parallel_parked"));
       }
       return events.filter(Boolean);
    }

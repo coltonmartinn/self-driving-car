@@ -665,3 +665,42 @@ test("a car's analog controls (a game controller) steer and brake gradually", ()
    car.update([], []);
    assert.ok(car.angle > before, "steers left");
 });
+
+// ---------- parallel parking ----------
+
+// A space at the curb on the northbound side, between two parked cars
+function parallelSpace() {
+   const { world, b } = tJunction();
+   const sim = new Simulation(world, { trafficOn: false });
+   sim.setTrip(b);
+   sim.startGeneration();
+   const spot = DrivingSchool.parallelSpotOn(sim, sim.trip.route);
+   return { world, sim, spot };
+}
+
+test("a parallel parking space sits between two parked cars at the curb", () => {
+   const { sim, spot } = parallelSpace();
+   assert.equal(sim.parked.length, 2);
+   const [front, back] = sim.parked;
+   assert.ok(Math.abs(distance(front, back) - (spot.height + 50)) < 1, "a gap of " + spot.height + " between them");
+   assert.ok(spot.center.x > sim.world.roadWidth / 4, "out of the lane, towards the curb");
+});
+
+test("parallel parking is judged on position, distance from the curb, angle and number of moves", () => {
+   const place = (along, toCurb, tilt, moves) => {
+      const { world, spot } = parallelSpace();
+      const dir = spot.directionVector;
+      const p = add(add(spot.center, scale(dir, along)), scale(perpendicular(dir), toCurb));
+      const car = new Car(p.x, p.y, 30, 50, "DUMMY", -Math.atan2(dir.y, dir.x) - Math.PI / 2 + tilt, 0);
+      car.controls.signal = "right";
+      const coach = new DrivingCoach(world, car);
+      coach.update([]);
+      coach.stats.moves = moves;
+      return coach.judgeParallelPark(spot).map((e) => e.rule).join();
+   };
+   assert.equal(place(0, -4, 0, 3), "parallel_parked");
+   assert.equal(place(80, -4, 0, 3), "missed_spot");
+   assert.equal(place(0, -20, 0, 3), "far_from_curb");
+   assert.equal(place(0, -4, 0.3, 3), "crooked_park");
+   assert.equal(place(0, -4, 0, 12), "too_many_moves");
+});
