@@ -19,6 +19,10 @@
    <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
    <script src="js/pwa.js" defer></script>
+   <script src="js/i18n.js"></script>
+   <script src="js/i18n/es-ui.js"></script>
+   <script src="js/i18n/es-lessons.js"></script>
+   <script src="js/i18n/es-pages.js"></script>
 </head>
 <body class="quiz-page">
    <header class="topbar">
@@ -158,7 +162,7 @@
          const chip = document.createElement("button");
          chip.type = "button";
          chip.className = "chip";
-         chip.textContent = c;
+         chip.textContent = tr(c);
          chip.addEventListener("click", () => {
             picked.has(c) ? picked.delete(c) : picked.add(c);
             chip.classList.toggle("active", picked.has(c));
@@ -183,7 +187,7 @@
             });
             entries.push(e);
             store("practice-log", entries);
-            formStatus.textContent = "✓ Added " + e.minutes + " minutes";
+            formStatus.textContent = "✓ " + tr("Added {minutes} minutes", { minutes: e.minutes });
             fMinutes.value = "";
             fNotes.value = "";
             fNight.checked = false;
@@ -191,7 +195,7 @@
             for (const chip of fConditions.children) chip.classList.remove("active");
             render();
          } catch (err) {
-            formStatus.textContent = "😕 " + err.message;
+            formStatus.textContent = "😕 " + tr(err.message);
          }
       });
 
@@ -199,28 +203,28 @@
          const t = PracticeLog.totals(entries, goal);
          const st = PracticeLog.STATES[goal.state];
          stateNote.textContent = st
-            ? st.name + ": " + (st.hours ? st.hours + " hours" + (st.night ? ", " + st.night + " at night" : "") : "no state minimum") +
-               ". " + (st.note ? st.note + " " : "") + "Laws change: check with your DMV."
+            ? st.name + ": " + (st.hours ? tr("{hours} hours", { hours: st.hours }) + (st.night ? ", " + tr("{night} at night", { night: st.night }) : "")
+               : tr("no state minimum")) + ". " + (st.note ? tr(st.note) + " " : "") + tr("Laws change: check with your DMV.")
             : "";
          const name = localStorage.getItem("school-name");
-         logWho.textContent = (name ? name + " · " : "") + t.sessions + " drive" + (t.sessions == 1 ? "" : "s") + " logged";
+         logWho.textContent = (name ? name + " · " : "") + tr(t.sessions == 1 ? "{n} drive logged" : "{n} drives logged", { n: t.sessions });
          hoursText.textContent = t.hours.toFixed(1) + " h";
          nightText.textContent = t.nightHours.toFixed(1) + " h";
          hoursBar.style.width = t.percent + "%";
          nightBar.style.width = t.nightPercent + "%";
          conditionTotals.innerHTML = Object.entries(t.byCondition)
             .filter(([, m]) => m > 0)
-            .map(([c, m]) => "<span class='badge'>" + c + " · " + (m / 60).toFixed(1) + " h</span>").join("") +
-            (t.done ? "<span class='badge good'>🎉 Goal reached</span>" : "");
+            .map(([c, m]) => "<span class='badge'>" + tr(c) + " · " + (m / 60).toFixed(1) + " h</span>").join("") +
+            (t.done ? "<span class='badge good'>🎉 " + tr("Goal reached") + "</span>" : "");
 
          const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
          logTable.innerHTML = sorted.length == 0
-            ? "<tr><td class='muted'>No drives yet. Add your first one above.</td></tr>"
-            : "<tr><th>Date</th><th>Time</th><th>Night</th><th>Conditions</th><th>Supervisor</th><th>Notes</th><th class='no-print'></th></tr>" +
+            ? "<tr><td class='muted'>" + tr("No drives yet. Add your first one above.") + "</td></tr>"
+            : "<tr>" + ["Date", "Time", "Night", "Conditions", "Supervisor", "Notes"].map((h) => "<th>" + tr(h) + "</th>").join("") + "<th class='no-print'></th></tr>" +
                sorted.map((e) =>
                   "<tr><td>" + e.date + "</td><td>" + e.minutes + " min</td><td>" + (e.night ? "🌙" : "") + "</td><td>" +
-                  esc(e.conditions.join(", ")) + "</td><td>" + esc(e.supervisor) + "</td><td>" + esc(e.notes) + "</td>" +
-                  "<td class='no-print'><button class='ghost small-btn' aria-label='Delete this drive' onclick=\"removeEntry('" + e.id + "')\">✕</button></td></tr>"
+                  esc(e.conditions.map((c) => tr(c)).join(", ")) + "</td><td>" + esc(e.supervisor) + "</td><td>" + esc(e.notes) + "</td>" +
+                  "<td class='no-print'><button class='ghost small-btn' aria-label='" + tr("Delete this drive") + "' onclick=\"removeEntry('" + e.id + "')\">✕</button></td></tr>"
                ).join("");
 
          // practice ideas from the simulator
@@ -228,11 +232,11 @@
          const focus = Progress.summarize(history, LESSONS, DrivingCoach.RULES).focus;
          const practiceIdeas = PracticeLog.suggestions(focus);
          ideasCard.hidden = practiceIdeas.length == 0;
-         ideas.innerHTML = practiceIdeas.map((i) => "<li><span>💡</span><div><b>" + esc(i.title) + "</b><span class='tip'>" + esc(i.idea) + "</span></div></li>").join("");
+         ideas.innerHTML = practiceIdeas.map((i) => "<li><span>💡</span><div><b>" + esc(tr(i.title)) + "</b><span class='tip'>" + esc(tr(i.idea)) + "</span></div></li>").join("");
       }
 
       function removeEntry(id) {
-         if (!confirm("Delete this drive from the log?")) return;
+         if (!confirm(tr("Delete this drive from the log?"))) return;
          entries = entries.filter((e) => e.id != id);
          store("practice-log", entries);
          render();

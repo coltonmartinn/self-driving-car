@@ -19,6 +19,10 @@
    <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
    <script src="js/pwa.js" defer></script>
+   <script src="js/i18n.js"></script>
+   <script src="js/i18n/es-ui.js"></script>
+   <script src="js/i18n/es-lessons.js"></script>
+   <script src="js/i18n/es-pages.js"></script>
 </head>
 <body class="quiz-page">
    <header class="topbar">
@@ -37,7 +41,7 @@
       <section class="card quiz-card no-print">
          <span class="eyebrow">👩‍🏫 For teachers and parents</span>
          <h1>Your class at a glance</h1>
-         <p class="muted">
+         <p class="muted" data-i18n="html">
             Ask each student to open <b>Driving School → 📋 Progress report → Copy link</b> and send it to you.
             Paste the links below, one per line. Everything stays in this browser: nothing is uploaded
             (<a href="privacy.html">privacy</a>).
@@ -105,8 +109,8 @@
                bad++;
             }
          }
-         loadStatus.textContent = students.length + " student report" + (students.length == 1 ? "" : "s") + " loaded" +
-            (bad ? " · " + bad + " line" + (bad == 1 ? "" : "s") + " didn't look like a report link" : "");
+         loadStatus.textContent = tr(students.length == 1 ? "{n} student report loaded" : "{n} student reports loaded", { n: students.length }) +
+            (bad ? " · " + tr(bad == 1 ? "{n} line didn't look like a report link" : "{n} lines didn't look like a report link", { n: bad }) : "");
          if (students.length == 0) {
             classReport.hidden = true;
             return;
@@ -125,44 +129,44 @@
       function render(c) {
          current = c;
          const n = c.rows.length;
-         classTitle.textContent = n + " student" + (n == 1 ? "" : "s");
-         classDate.textContent = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+         classTitle.textContent = tr(n == 1 ? "{n} student" : "{n} students", { n });
+         classDate.textContent = new Date().toLocaleDateString(I18N.lang, { year: "numeric", month: "long", day: "numeric" });
          const avg = (xs) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
          const quizzes = c.rows.map((r) => r.quizBest).filter((q) => q != null);
          classStats.innerHTML = [
-            [(c.rows.reduce((t, r) => t + r.lessonsPassed, 0) / n).toFixed(1) + "/" + LESSONS.length, "lessons passed (avg)"],
-            [c.rows.filter((r) => r.roadTestPassed).length + "/" + n, "passed road test"],
-            [quizzes.length ? avg(quizzes) + "%" : "–", "permit quiz (avg best)"],
-            [c.rows.reduce((t, r) => t + r.minutes, 0) + " min", "total practice"],
+            [(c.rows.reduce((t, r) => t + r.lessonsPassed, 0) / n).toFixed(1) + "/" + LESSONS.length, tr("lessons passed (avg)")],
+            [c.rows.filter((r) => r.roadTestPassed).length + "/" + n, tr("passed road test")],
+            [quizzes.length ? avg(quizzes) + "%" : "–", tr("permit quiz (avg best)")],
+            [c.rows.reduce((t, r) => t + r.minutes, 0) + " min", tr("total practice")],
             improvement(c.rows),
          ].map(([v, label]) => "<div class='stat'><b>" + v + "</b><span>" + label + "</span></div>").join("");
 
          classFocus.innerHTML = c.focus.length == 0
-            ? "<li>🌟 No repeat mistakes across the class yet.</li>"
+            ? "<li>🌟 " + tr("No repeat mistakes across the class yet.") + "</li>"
             : c.focus.map((f) =>
                "<li><span>" + (f.severity == "critical" ? "❌" : f.severity == "major" ? "⛔" : "⚠️") + "</span><div><b>" +
-               esc(f.title) + "</b> · " + f.students + " of " + n + " students<span class='tip'>" + esc(f.tip) + "</span></div></li>").join("");
+               esc(tr(f.title)) + "</b> · " + tr("{count} of {n} students", { count: f.students, n }) + "<span class='tip'>" + esc(tr(f.tip)) + "</span></div></li>").join("");
 
          classTable.innerHTML =
-            "<tr><th>Student</th><th>Lessons</th><th>Road test</th><th>Quiz</th><th>Practice</th><th>Last active</th><th>Needs work on</th></tr>" +
+            "<tr>" + ["Student", "Lessons", "Road test", "Quiz", "Practice", "Last active", "Needs work on"].map((h) => "<th>" + tr(h) + "</th>").join("") + "</tr>" +
             c.rows.map((r) =>
                "<tr><td><b>" + esc(r.name) + "</b></td>" +
                "<td><div class='mini-bar'><div style='width:" + (r.lessonsPassed / r.lessonCount) * 100 + "%'></div></div>" +
                r.lessonsPassed + "/" + r.lessonCount + "</td>" +
-               "<td>" + (r.roadTestPassed ? "<span class='badge good'>Passed</span>" : "–") + "</td>" +
+               "<td>" + (r.roadTestPassed ? "<span class='badge good'>" + tr("Passed") + "</span>" : "–") + "</td>" +
                "<td>" + (r.quizBest == null ? "–" : r.quizBest + "%") + "</td>" +
-               "<td>" + r.minutes + " min · " + r.drives + " drives</td>" +
-               "<td>" + (r.lastActive ? new Date(r.lastActive).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "–") + "</td>" +
-               "<td>" + (r.focus ? esc(r.focus.title) : "–") + "</td></tr>").join("");
+               "<td>" + r.minutes + " min · " + r.drives + " " + tr("drives") + "</td>" +
+               "<td>" + (r.lastActive ? new Date(r.lastActive).toLocaleDateString(I18N.lang, { month: "short", day: "numeric" }) : "–") + "</td>" +
+               "<td>" + (r.focus ? esc(tr(r.focus.title)) : "–") + "</td></tr>").join("");
          classReport.hidden = false;
       }
 
       // How much scores went up, from each student's first drives to their latest
       function improvement(rows) {
          const both = rows.filter((r) => r.firstScore != null && r.latestScore != null);
-         if (both.length == 0) return ["–", "score change, first → latest drives"];
+         if (both.length == 0) return ["–", tr("score change, first → latest drives")];
          const change = Math.round(both.reduce((t, r) => t + r.latestScore - r.firstScore, 0) / both.length);
-         return [(change >= 0 ? "+" : "") + change, "avg score change, first → latest drives"];
+         return [(change >= 0 ? "+" : "") + change, tr("avg score change, first → latest drives")];
       }
 
       function clearAll() {

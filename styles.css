@@ -486,6 +486,12 @@ textarea {
    color: var(--text);
 }
 
+.lang-switch {
+   min-height: 34px;
+   padding: 6px 12px;
+   font-size: 13px;
+}
+
 .install-btn {
    min-height: 34px;
    padding: 6px 12px;
@@ -2462,6 +2468,13 @@ body.editor {
       margin-left: 0;
       width: 100%;
       overflow-x: auto;
+      order: 2;
+   }
+
+   .topbar .lang-switch {
+      margin-left: auto;
+      min-height: 30px;
+      padding: 4px 10px;
    }
 
    .topbar nav a {

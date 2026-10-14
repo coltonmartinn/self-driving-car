@@ -19,6 +19,10 @@
    <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
    <script src="js/pwa.js" defer></script>
+   <script src="js/i18n.js"></script>
+   <script src="js/i18n/es-ui.js"></script>
+   <script src="js/i18n/es-lessons.js"></script>
+   <script src="js/i18n/es-pages.js"></script>
 </head>
 <body class="quiz-page">
    <header class="topbar">
@@ -48,7 +52,7 @@
          </p>
 
          <h2>Sharing a progress report</h2>
-         <p>
+         <p data-i18n="html">
             The <b>Copy link</b> button puts the student's report inside the link itself. Whoever the student sends
             it to can see that report. The link isn't stored on a server, and nobody else can find it.
             The class view keeps pasted links in the teacher's own browser only.
@@ -56,9 +60,9 @@
 
          <h2>What does go over the internet</h2>
          <ul>
-            <li><b>The app's files</b> come from GitHub Pages, which hosts the site.</li>
-            <li><b>Fonts</b> come from Google Fonts.</li>
-            <li>
+            <li data-i18n="html"><b>The app's files</b> come from GitHub Pages, which hosts the site.</li>
+            <li data-i18n="html"><b>Fonts</b> come from Google Fonts.</li>
+            <li data-i18n="html">
                <b>Searching for a town</b> sends what you type to free map services built on OpenStreetMap data:
                Nominatim (or Photon by Komoot, as a backup) to find the place, then one of the public Overpass servers
                (overpass-api.de and its mirrors) to download its streets. The five built-in cities need no search.
@@ -72,7 +76,7 @@
             correct, or delete on our side. Teachers who collect report links decide how to keep them.
          </p>
 
-         <p class="cert-note">
+         <p class="cert-note" data-i18n="html">
             The source code is open (MIT license) on
             <a href="https://github.com/coltonmartinn/self-driving-car">GitHub</a>, so anyone can check these claims.
          </p>

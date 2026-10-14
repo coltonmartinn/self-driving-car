@@ -35,11 +35,12 @@ class Autopilot {
    }
 
    // An instructor's line, the first time `key` comes up (or again after `again` frames)
-   #say(key, title, tip = "", again = Infinity) {
+   // (title and tip can hold {names} filled from vars, so they translate)
+   #say(key, title, tip = "", again = Infinity, vars = null) {
       const last = this.said.get(key);
       if (last != null && this.frame - last < again) return null;
       this.said.set(key, this.frame);
-      return { severity: "demo", rule: "demo", title, tip };
+      return { severity: "demo", rule: "demo", title, tip, vars };
    }
 
    // Drive one frame. Returns what the driver says now (or null).
@@ -73,7 +74,7 @@ class Autopilot {
          }
       }
       if (this.frame == 1) {
-         say("start", "Easing onto the gas", "Smooth and steady. I'll keep just under " + this.lesson.speedLimit + " mph.");
+         say("start", "Easing onto the gas", "Smooth and steady. I'll keep just under {limit} mph.", Infinity, { limit: this.lesson.speedLimit });
       }
 
       // steer for a point ahead, in the right-hand lane. If that point is
@@ -129,7 +130,7 @@ class Autopilot {
       const zone = this.coach.zoneAt(car) || this.coach.zoneAt(route.pointAt(loc.progress + 160));
       if (zone) {
          target = limit((zone.limit - 2) / mph, "school zone");
-         say(zone, "School zone: slowing to " + zone.limit + " mph", "Children could step out from anywhere. Eyes on the sidewalks.");
+         say(zone, "School zone: slowing to {limit} mph", "Children could step out from anywhere. Eyes on the sidewalks.", Infinity, { limit: zone.limit });
       }
 
       // a truck parked in our lane: wait for a gap, then go around it
@@ -197,7 +198,8 @@ class Autopilot {
       if (next && next.at - loc.progress < 350 && Math.abs(next.turn) < 2.4 && !parkTarget) {
          const side = next.turn > 0 ? "left" : "right";
          controls.signal = side;
-         say(next, "Signaling " + side + " for the turn", "About 100 feet before the corner, and slowing down before it, not in it.");
+         say(next, side == "left" ? "Signaling left for the turn" : "Signaling right for the turn",
+            "About 100 feet before the corner, and slowing down before it, not in it.");
       }
 
       // signs and signals
@@ -267,8 +269,8 @@ class Autopilot {
                if (t.controls.reverse && t.hazardBrake > 0) {
                   say(t, "Brake lights ahead! Braking right away", "A safe following distance is what gives you time to stop.");
                } else if (along < 300 && car.speed > 0.8) {
-                  say("follow", "Keeping " + this.coach.followSeconds + "+ seconds behind this car",
-                     "Count: one-thousand-one, one-thousand-two" + (this.coach.followSeconds > 2 ? ", one-thousand-three." : "."), 1800);
+                  say("follow", this.coach.followSeconds > 2 ? "Keeping 3+ seconds behind this car" : "Keeping 2+ seconds behind this car",
+                     this.coach.followSeconds > 2 ? "Count: one-thousand-one, one-thousand-two, one-thousand-three." : "Count: one-thousand-one, one-thousand-two.", 1800);
                }
             }
          }

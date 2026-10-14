@@ -143,6 +143,12 @@ class DrivingCoach {
    // speed (world units per frame) to mph: 60 frames/s, 10 units per meter
    static MPH_PER_UNIT = (60 / 10) * 2.23694;
 
+   // A mistake's detail: in English, plus the pieces to show it in another language
+   static detail(text, vars = {}) {
+      const english = text.replace(/\{(\w+)\}/g, (m, name) => (name in vars ? String(vars[name]) : m));
+      return { detail: english, detailKey: text, detailVars: vars };
+   }
+
    static mph(speed) {
       return Math.abs(speed) * DrivingCoach.MPH_PER_UNIT;
    }
@@ -346,18 +352,18 @@ class DrivingCoach {
          this.counters.zoneSpeeding = mph > zone.limit + 3 ? this.counters.zoneSpeeding + 1 : 0;
          if (this.counters.zoneSpeeding == 45 && !this.reportedZones.has(zone)) {
             this.reportedZones.add(zone);
-            this.report("school_zone_speeding", { detail: Math.round(mph) + " mph in a " + zone.limit });
+            this.report("school_zone_speeding", DrivingCoach.detail("{mph} mph in a {limit}", { mph: Math.round(mph), limit: zone.limit }));
          }
          this.counters.speeding = 0;
          return;
       }
       this.counters.zoneSpeeding = 0;
       const limit = this.currentLimit;
-      const detail = Math.round(mph) + " mph in a " + limit;
+      const detail = DrivingCoach.detail("{mph} mph in a {limit}", { mph: Math.round(mph), limit });
       if (mph > limit + 3) {
          this.counters.speeding++;
          if (this.counters.speeding == 60) {
-            this.report("speeding", { detail });
+            this.report("speeding", detail);
          }
       } else {
          this.counters.speeding = 0;
@@ -365,7 +371,7 @@ class DrivingCoach {
       if (mph > limit + 15) {
          this.counters.reckless++;
          if (this.counters.reckless == 30) {
-            this.report("reckless_speed", { detail });
+            this.report("reckless_speed", detail);
          }
       } else {
          this.counters.reckless = 0;
@@ -426,7 +432,7 @@ class DrivingCoach {
             this.stats.fullStops++;
             this.report("full_stop");
          } else if (a.minSpeed < 1.2) {
-            this.report("rolling_stop", { detail: "slowest " + Math.round(DrivingCoach.mph(a.minSpeed)) + " mph" });
+            this.report("rolling_stop", DrivingCoach.detail("slowest {mph} mph", { mph: Math.round(DrivingCoach.mph(a.minSpeed)) }));
          } else {
             this.report("ran_stop");
          }
@@ -522,7 +528,7 @@ class DrivingCoach {
          this.counters.safeGap = 0;
          this.counters.tailgating++;
          if (this.counters.tailgating == 90) {
-            this.report("tailgating", { detail: seconds.toFixed(1) + " s behind, keep " + this.followSeconds + "+" });
+            this.report("tailgating", DrivingCoach.detail("{seconds} s behind, keep {needed}+", { seconds: seconds.toFixed(1), needed: this.followSeconds }));
          }
       } else {
          this.counters.tailgating = 0;
@@ -593,7 +599,7 @@ class DrivingCoach {
       if (!this.pass && blocker && offset < -rw * 0.05) {
          this.pass = { blocker, frame: this.frame, signaled: this.signaledRecently("left"), looked: this.lookedRecently("left") };
          if (!this.pass.signaled) this.report("pass_no_signal");
-         if (!this.pass.looked) this.report("no_blind_spot_check", { detail: "left, before passing" });
+         if (!this.pass.looked) this.report("no_blind_spot_check", DrivingCoach.detail("left, before passing"));
          // anyone coming the other way, too close to pass safely?
          const car = this.car;
          const heading = this.heading();
@@ -761,12 +767,12 @@ class DrivingCoach {
       if (this.rules && this.rules.has("no_blind_spot_check")) {
          events.push(this.lookedRecently("right", 900)
             ? this.report("checked_blind_spot")
-            : this.report("no_blind_spot_check", { detail: "right, before pulling over" }));
+            : this.report("no_blind_spot_check", DrivingCoach.detail("right, before pulling over")));
       }
       if (!inside) {
          events.push(this.report("missed_spot"));
       } else if (off > 12) {
-         events.push(this.report("crooked_park", { detail: Math.round(off) + "° off" }));
+         events.push(this.report("crooked_park", DrivingCoach.detail("{degrees}° off", { degrees: Math.round(off) })));
       } else {
          events.push(this.report("parked_well"));
       }
@@ -788,17 +794,17 @@ class DrivingCoach {
          events.push(this.report("park_signal"));
       }
       if (!inside) {
-         events.push(this.report("missed_spot", { detail: Math.round(Math.abs(along)) + " units off the middle" }));
+         events.push(this.report("missed_spot", DrivingCoach.detail("{units} units off the middle", { units: Math.round(Math.abs(along)) })));
          return events.filter(Boolean);
       }
       if (toCurb < -9) {
-         events.push(this.report("far_from_curb", { detail: Math.round((7 - toCurb) / 3.048) + " ft away" }));
+         events.push(this.report("far_from_curb", DrivingCoach.detail("{feet} ft away", { feet: Math.round((7 - toCurb) / 3.048) })));
       }
       if (off > 10) {
-         events.push(this.report("crooked_park", { detail: Math.round(off) + "° off" }));
+         events.push(this.report("crooked_park", DrivingCoach.detail("{degrees}° off", { degrees: Math.round(off) })));
       }
       if (this.stats.moves > movesAllowed) {
-         events.push(this.report("too_many_moves", { detail: this.stats.moves + " moves" }));
+         events.push(this.report("too_many_moves", DrivingCoach.detail("{moves} moves", { moves: this.stats.moves })));
       }
       if (events.every((e) => !e)) {
          events.push(this.report("parallel_parked"));

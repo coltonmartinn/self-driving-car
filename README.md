@@ -7,7 +7,7 @@
 
 Self-Driving City is a driving simulator built on real OpenStreetMap data. In **Driving School**, new drivers practice everything from stop signs to parallel parking, ambulances and texts arriving mid-drive, among rule-following traffic and pedestrians. A coach grades every drive like a road test, a careful demo driver shows how each lesson is done, and every drive can be replayed with the mistakes marked. In the **AI Lab**, a hundred neural-network cars teach themselves to drive the same streets by evolution.
 
-**▶ [Try it live](https://coltonmartinn.github.io/self-driving-car/)**. It runs in the browser and works on phones.
+**▶ [Try it live](https://coltonmartinn.github.io/self-driving-car/)**. It runs in the browser, works on phones and offline, and is available in English and Spanish ([en español](https://coltonmartinn.github.io/self-driving-car/?lang=es)).
 
 ![A student signals, comes to a full stop at a stop sign, gets praise from the coach, and turns right](docs/driving-school-demo.gif)
 
@@ -100,7 +100,7 @@ Open http://localhost:8080. The local server proxies map downloads, which makes 
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | 113 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, the driving coach, whole lessons driven by the demo driver on real maps, replay, progress reports, the quiz, the practice log, and offline caching |
+| `npm test` | 120 tests (`node:test`): geometry, map import, routing, traffic, pedestrians, learning, the driving coach, whole lessons driven by the demo driver on real maps, replay, progress reports, the quiz, the practice log, offline caching, and that every visible string has a Spanish translation |
 | `npm run typecheck` | TypeScript checks the plain JavaScript (`checkJs`), with no build step |
 | `npm run lint` | ESLint |
 | `node scripts/train.js --generations 150 --trips-per-gen 3 --out brain.json` | Train a brain headless (see [experiments](docs/experiments/README.md)) |
@@ -132,6 +132,7 @@ flowchart LR
 | Demo driver | `js/school/autopilot.js` | Drives any lesson carefully and explains itself; also the end-to-end test driver |
 | Replay | `js/school/replay.js` | Records plain snapshots of each drive and places the coach's events on a timeline |
 | Lesson extras | `js/school/drivingSchool.js`, `js/school/phone.js` | School zones, parked trucks, parking spaces, ambulances, texts |
+| Spanish | `js/i18n.js`, `js/i18n/` | The English text is the key, so anything untranslated stays readable; a test checks every visible string and placeholder |
 | Reports and quiz | `js/school/progress.js`, `js/school/quiz.js`, `class.html`, `quiz.html` | Drive history summaries, share links encoded in the URL, class roll-ups, permit questions |
 | Offline app | `sw.js`, `manifest.webmanifest`, `js/pwa.js` | Service worker that saves every page and city; a test checks that every file the pages load is on its list |
 | Pedestrians | `js/pedestrians.js` | People who wait for a gap at crosswalks and walk across; traffic and the coach both respect them |

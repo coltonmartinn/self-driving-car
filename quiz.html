@@ -19,6 +19,11 @@
    <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
    <script src="js/pwa.js" defer></script>
+   <script src="js/i18n.js"></script>
+   <script src="js/i18n/es-ui.js"></script>
+   <script src="js/i18n/es-lessons.js"></script>
+   <script src="js/i18n/es-pages.js"></script>
+   <script src="js/i18n/es-quiz.js"></script>
 </head>
 <body class="quiz-page">
    <header class="topbar">
@@ -100,12 +105,12 @@
       let lastCount = 20;
       let lastTopic = null;
 
-      allBtn.textContent = "All " + QUIZ_BANK.length + " questions";
+      allBtn.textContent = tr("All {count} questions", { count: QUIZ_BANK.length });
       const topics = [...new Set(QUIZ_BANK.map((q) => q.topic))];
       for (const topic of topics) {
          const chip = document.createElement("button");
          chip.className = "chip";
-         chip.textContent = topic + " (" + QUIZ_BANK.filter((q) => q.topic == topic).length + ")";
+         chip.textContent = tr(topic) + " (" + QUIZ_BANK.filter((q) => q.topic == topic).length + ")";
          chip.addEventListener("click", () => start(99, topic));
          topicChips.append(chip);
       }
@@ -121,9 +126,9 @@
       function showStart() {
          const saved = getResults();
          quizStats.innerHTML = [
-            [saved.best == null ? "–" : saved.best + "%", "best score"],
-            [saved.tests, "tests taken"],
-            [saved.passedFull ? "✓ Yes" : "Not yet", "passed a full test"],
+            [saved.best == null ? "–" : saved.best + "%", tr("best score")],
+            [saved.tests, tr("tests taken")],
+            [saved.passedFull ? "✓ " + tr("Yes") : tr("Not yet"), tr("passed a full test")],
          ].map(([v, label]) => "<div class='stat'><b>" + v + "</b><span>" + label + "</span></div>").join("");
          screen(startScreen);
       }
@@ -141,18 +146,18 @@
 
       function showQuestion() {
          const q = questions[index];
-         qCounter.textContent = "Question " + (index + 1) + " of " + questions.length;
-         qTopic.textContent = q.topic;
+         qCounter.textContent = tr("Question {n} of {count}", { n: index + 1, count: questions.length });
+         qTopic.textContent = tr(q.topic);
          qBar.style.width = (index / questions.length) * 100 + "%";
          qSign.innerHTML = q.sign ? SIGNS[q.sign] : "";
          qSign.hidden = !q.sign;
-         qText.textContent = q.q;
+         qText.textContent = tr(q.q);
          qAnswers.innerHTML = "";
          q.options.forEach((text, i) => {
             const b = document.createElement("button");
             b.className = "answer";
             b.innerHTML = "<span class='key'>" + (i + 1) + "</span><span></span>";
-            b.lastChild.textContent = text;
+            b.lastChild.textContent = tr(text);
             b.addEventListener("click", () => choose(i));
             qAnswers.append(b);
          });
@@ -173,10 +178,10 @@
          });
          const right = i == q.answer;
          qExplain.className = "explain " + (right ? "good" : "bad");
-         qExplain.innerHTML = "<b>" + (right ? "✅ Correct!" : "❌ Not quite.") + "</b> <span></span>";
-         qExplain.lastChild.textContent = q.why;
+         qExplain.innerHTML = "<b>" + (right ? "✅ " + tr("Correct!") : "❌ " + tr("Not quite.")) + "</b> <span></span>";
+         qExplain.lastChild.textContent = tr(q.why);
          qExplain.hidden = false;
-         nextBtn.textContent = index == questions.length - 1 ? "See results" : "Next →";
+         nextBtn.textContent = index == questions.length - 1 ? tr("See results") : tr("Next →");
          nextBtn.hidden = false;
          nextBtn.focus({ preventScroll: true });
       }
@@ -195,17 +200,18 @@
          const r = Quiz.grade(questions, answers);
          rGrade.textContent = r.percent + "%";
          rGrade.classList.toggle("fail", !r.passed);
-         rTitle.textContent = r.passed ? "You'd pass! 🎉" : "Keep studying. You'll get there.";
-         rSub.textContent = r.correct + " of " + r.total + " correct · " + Quiz.PASS_PERCENT + "% to pass (most states need 70-80%)";
+         rTitle.textContent = r.passed ? tr("You'd pass! 🎉") : tr("Keep studying. You'll get there.");
+         rSub.textContent = tr("{correct} of {total} correct", { correct: r.correct, total: r.total }) + " · " +
+            tr("{percent}% to pass (most states need 70-80%)", { percent: Quiz.PASS_PERCENT });
          const missed = questions.filter((q, i) => answers[i] != q.answer);
          rTopics.innerHTML = Object.keys(r.missedTopics).length == 0 ? "" :
-            "<p class='report-section'>Topics to review</p><div class='chips'>" +
-            Object.entries(r.missedTopics).map(([t, n]) => "<span class='badge bad'>" + t + " ×" + n + "</span>").join("") + "</div>";
+            "<p class='report-section'>" + tr("Topics to review") + "</p><div class='chips'>" +
+            Object.entries(r.missedTopics).map(([t, n]) => "<span class='badge bad'>" + tr(t) + " ×" + n + "</span>").join("") + "</div>";
          rMissed.innerHTML = missed.length == 0
-            ? "<p class='report-section'>Mistakes</p><ul class='report-list'><li>🌟 Perfect score!</li></ul>"
-            : "<p class='report-section'>Review</p><ul class='report-list'>" + missed.map((q) =>
-               "<li><span>❌</span><div><b>" + escapeHtml(q.q) + "</b><span class='tip'>Answer: " + escapeHtml(q.options[q.answer]) +
-               ". " + escapeHtml(q.why) + "</span></div></li>").join("") + "</ul>";
+            ? "<p class='report-section'>" + tr("Mistakes") + "</p><ul class='report-list'><li>🌟 " + tr("Perfect score!") + "</li></ul>"
+            : "<p class='report-section'>" + tr("Review") + "</p><ul class='report-list'>" + missed.map((q) =>
+               "<li><span>❌</span><div><b>" + escapeHtml(tr(q.q)) + "</b><span class='tip'>" + tr("Answer:") + " " + escapeHtml(tr(q.options[q.answer])) +
+               ". " + escapeHtml(tr(q.why)) + "</span></div></li>").join("") + "</ul>";
          retryMissedBtn.hidden = missed.length == 0;
          saveResult(r, questions.length >= 20 && !lastTopic);
          screen(resultScreen);

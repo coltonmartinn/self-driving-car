@@ -2,7 +2,7 @@
 // Everything the pages need is saved on install; after that, pages load
 // from the saved copy at once and quietly refresh it in the background
 // (tests/pwa.test.js checks that this list covers every page's files).
-const CACHE = "self-driving-city-v10";
+const CACHE = "self-driving-city-v11";
 
 const APP_FILES = [
    "./",
@@ -29,6 +29,11 @@ const APP_FILES = [
    "data/cities/shibuya.json",
    "data/cities/times-square.json",
    "data/pretrained-brain.json",
+   "js/i18n.js",
+   "js/i18n/es-lessons.js",
+   "js/i18n/es-pages.js",
+   "js/i18n/es-quiz.js",
+   "js/i18n/es-ui.js",
    "js/car/car.js",
    "js/car/controls.js",
    "js/car/genetics.js",

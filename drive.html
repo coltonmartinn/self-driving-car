@@ -18,6 +18,10 @@
    <meta name="theme-color" content="#2457f5">
    <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+   <script src="js/i18n.js"></script>
+   <script src="js/i18n/es-ui.js"></script>
+   <script src="js/i18n/es-lessons.js"></script>
+   <script src="js/i18n/es-pages.js"></script>
    <script src="js/pwa.js" defer></script>
 </head>
 <body class="app school">
@@ -454,7 +458,7 @@
       }
 
       async function openWorld(load, slug, label) {
-         showLoading("Loading " + Places.shortName(label) + "…");
+         showLoading(tr("Loading {place}…", { place: Places.shortName(label) }));
          try {
             const newWorld = await load();
             setWorld(newWorld, slug);
@@ -483,10 +487,10 @@
       }
 
       function cityName() {
-         if (citySlug == "mine") return "your city";
+         if (citySlug == "mine") return tr("your city");
          const city = featuredCities.find((c) => c.slug == citySlug);
          if (city) return city.label;
-         return world && world.place ? Places.shortName(world.place.name) : "this city";
+         return world && world.place ? Places.shortName(world.place.name) : tr("this city");
       }
 
       // ---------- screens ----------
@@ -523,7 +527,7 @@
          cityChips.innerHTML = "";
          const cities = [...featuredCities];
          if (savedCustomWorld()) {
-            cities.push({ slug: "mine", label: "My city", emoji: "🏗️" });
+            cities.push({ slug: "mine", label: tr("My city"), emoji: "🏗️" });
          }
          for (const city of cities) {
             const chip = document.createElement("button");
@@ -541,7 +545,7 @@
 
          const progress = getProgress();
          const passed = LESSONS.filter((l) => progress[l.id] && progress[l.id].passed).length;
-         progressBadge.textContent = passed + " of " + LESSONS.length + " lessons passed";
+         progressBadge.textContent = tr("{passed} of {count} lessons passed", { passed, count: LESSONS.length });
          certifiedBtn.style.display = progress.roadtest && progress.roadtest.passed ? "" : "none";
          renderBadges();
 
@@ -551,14 +555,14 @@
             const card = document.createElement("button");
             card.className = "lesson" + (l.id == "roadtest" ? " exam" : "");
             const badge = !result
-               ? "<span class='badge'>New</span>"
+               ? "<span class='badge'>" + tr("New") + "</span>"
                : result.passed
                   ? "<span class='badge good'>✓ " + result.grade + "</span>"
-                  : "<span class='badge bad'>Try again</span>";
+                  : "<span class='badge bad'>" + tr("Try again") + "</span>";
             card.innerHTML =
                "<div class='row'><span class='emoji'>" + l.emoji + "</span>" + badge + "</div>" +
-               "<span class='step'>" + (l.id == "roadtest" ? "FINAL EXAM" : "LESSON " + (i + 1)) + "</span>" +
-               "<b>" + l.title + "</b><span class='summary'>" + l.summary + "</span>";
+               "<span class='step'>" + (l.id == "roadtest" ? tr("FINAL EXAM") : tr("LESSON {n}", { n: i + 1 })) + "</span>" +
+               "<b>" + tr(l.title) + "</b><span class='summary'>" + tr(l.summary) + "</span>";
             card.addEventListener("click", () => showIntro(l));
             lessonGrid.append(card);
          });
@@ -570,18 +574,17 @@
          state = "intro";
          hud.style.display = "none";
          introEmoji.textContent = l.emoji;
-         introTitle.textContent = l.title;
-         introSummary.textContent = l.summary + " Driving in " + cityName() + ".";
+         introTitle.textContent = tr(l.title);
+         introSummary.textContent = tr(l.summary) + " " + tr("Driving in {city}.", { city: cityName() });
          introList.innerHTML = "";
          for (const line of l.learn) {
             const li = document.createElement("li");
-            li.textContent = line;
+            li.textContent = tr(line);
             introList.append(li);
          }
          introKeys.style.display = document.body.classList.contains("touch") ? "none" : "flex";
-         introLimit.textContent =
-            "Speed limit " + l.speedLimit + " mph · " +
-            (l.rules ? "the coach watches " + describeRules(l.rules) : "every rule counts") + ".";
+         introLimit.textContent = tr("Speed limit {limit} mph", { limit: l.speedLimit }) + " · " +
+            (l.rules ? tr("the coach watches {what}.", { what: describeRules(l.rules) }) : tr("every rule counts."));
          show(lessonIntro);
       }
 
@@ -592,8 +595,8 @@
             pedestrian_yield: "crosswalks", school_zone_speeding: "school zones", no_blind_spot_check: "blind spot checks",
             unsafe_pass: "safe passing", emergency_yield: "pulling over for sirens",
          };
-         const list = rules.filter((r) => names[r]).map((r) => names[r]);
-         return list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
+         const list = rules.filter((r) => names[r]).map((r) => tr(names[r]));
+         return list.slice(0, -1).join(", ") + " " + tr("and") + " " + list[list.length - 1];
       }
 
       // ---------- driving ----------
@@ -614,11 +617,11 @@
          if (sameTrip && tripDestination) {
             sim.setTrip(tripDestination);
          } else {
-            showLoading("Planning your route…");
+            showLoading(tr("Planning your route…"));
             tripDestination = DrivingSchool.pickTrip(sim, lesson.route, 25);
             hideLoading();
             if (!tripDestination) {
-               showLoading("😕 Couldn't find a good route here. Try another city.", true);
+               showLoading("😕 " + tr("Couldn't find a good route here. Try another city."), true);
                return;
             }
          }
@@ -655,7 +658,7 @@
          endReason = null;
          offRouteFrames = 0;
          toasts.innerHTML = "";
-         lessonName.textContent = (demo ? "👀 Demo · " : "") + lesson.emoji + " " + lesson.title;
+         lessonName.textContent = (demo ? "👀 " + tr("Demo") + " · " : "") + lesson.emoji + " " + tr(lesson.title);
          limitValue.textContent = lesson.speedLimit;
          hud.style.display = "block";
          show(null);
@@ -724,8 +727,10 @@
                if (hazards) {
                   const h = hazards.update(car);
                   if (h && h.type == "done" && h.handled) {
-                     const detail = h.reaction != null ? "braked in " + h.reaction.toFixed(1) + " s" : "had room to spare";
-                     const event = coach.report("hazard_avoided", { detail });
+                     const detail = h.reaction != null
+                        ? DrivingCoach.detail("braked in {seconds} s", { seconds: h.reaction.toFixed(1) })
+                        : DrivingCoach.detail("had room to spare");
+                     const event = coach.report("hazard_avoided", detail);
                      if (event) toast(event);
                   }
                }
@@ -775,15 +780,15 @@
       function updatePhone() {
          const e = phone.update(car);
          if (phone.looking) {
-            phoneSpeed.textContent = "The car is still moving at " + Math.round(DrivingCoach.mph(car.speed)) + " mph.";
+            phoneSpeed.textContent = tr("The car is still moving at {mph} mph.", { mph: Math.round(DrivingCoach.mph(car.speed)) });
             phoneTimer.style.width = (phone.blind / phone.blindFrames) * 100 + "%";
-            const typed = "ok i'm driving, ttyl";
+            const typed = tr("ok i'm driving, ttyl");
             phoneTyping.textContent = typed.slice(0, Math.max(1, Math.round((1 - phone.blind / phone.blindFrames) * typed.length)));
          }
          if (!e) return;
          if (e.type == "buzz") {
-            phoneFrom.textContent = e.message.from;
-            phoneText.textContent = e.message.text;
+            phoneFrom.textContent = tr(e.message.from);
+            phoneText.textContent = tr(e.message.text);
             phoneReply.hidden = e.message.forced || !!pilot;
             phoneBanner.hidden = false;
             sounds.buzz();
@@ -793,11 +798,11 @@
          } else if (e.type == "eyes-up") {
             phoneScreen.hidden = true;
             phoneBanner.hidden = true;
-            const detail = formatFeet(e.distance) + " without seeing the road";
+            const detail = DrivingCoach.detail("{feet} without seeing the road", { feet: formatFeet(e.distance) });
             if (e.forced) {
-               toast({ severity: "info", title: "You drove " + detail, tip: "That was one 2-second glance. Now leave the phone alone: the next texts will try to tempt you." }, 7000);
+               toast({ severity: "info", title: tr("You drove {feet} without seeing the road", { feet: formatFeet(e.distance) }), tip: "That was one 2-second glance. Now leave the phone alone: the next texts will try to tempt you." }, 7000);
             } else {
-               const event = coach.report("phone_use", { detail });
+               const event = coach.report("phone_use", detail);
                if (event) toast(event);
             }
          } else if (e.type == "ignored") {
@@ -812,8 +817,8 @@
       }
 
       function showPhoneScreen() {
-         phoneScreenFrom.textContent = phone.message ? phone.message.from : "";
-         phoneScreenText.textContent = phone.message ? phone.message.text : "";
+         phoneScreenFrom.textContent = phone.message ? tr(phone.message.from) : "";
+         phoneScreenText.textContent = phone.message ? tr(phone.message.text) : "";
          phoneBanner.hidden = true;
          phoneScreen.hidden = false;
       }
@@ -836,7 +841,12 @@
             if (controls.looked) {
                lookFx = { side: controls.looked, until: coach.frame + 50 };
                const someone = sim.traffic.find((t) => inBlindSpot(t, controls.looked));
-               if (someone) toast({ severity: "info", title: "🚗 Car in your " + controls.looked + " blind spot!", tip: "Wait for it to pass before moving over." }, 3000);
+               if (someone) {
+                  toast({
+                     severity: "info", title: controls.looked == "left" ? "🚗 Car in your left blind spot!" : "🚗 Car in your right blind spot!",
+                     tip: "Wait for it to pass before moving over.",
+                  }, 3000);
+               }
             }
          }
          if (lookFx && coach.frame > lookFx.until) lookFx = null;
@@ -895,16 +905,16 @@
          replayMarks.innerHTML = replay.marks
             .filter((m) => m.severity != "info")
             .map((m) => "<span class='mark " + m.severity + "' style='left:" + (m.at * 100).toFixed(2) + "%' title='" +
-               escapeHtml(m.title) + "'></span>").join("");
+               escapeHtml(tr(m.title)) + "'></span>").join("");
          const mistakes = replay.marks.filter((m) => DrivingCoach.PENALTY[m.severity]);
          replayJumps.innerHTML = mistakes.map((m, i) =>
             "<button class='chip " + m.severity + "' data-jump='" + i + "'>" + (m.severity == "minor" ? "⚠️ " : "⛔ ") +
-            escapeHtml(m.title) + " · " + formatClock(recorder.snapshots[m.index].coachFrame) + "</button>").join("");
+            escapeHtml(tr(m.title)) + " · " + formatClock(recorder.snapshots[m.index].coachFrame) + "</button>").join("");
          replayJumps.querySelectorAll("[data-jump]").forEach((b) => {
             b.addEventListener("click", () => jumpTo(recorder.leadIn(mistakes[Number(b.getAttribute("data-jump"))].index)));
          });
          toasts.innerHTML = "";
-         lessonName.textContent = "▶ Replay · " + lesson.emoji + " " + lesson.title;
+         lessonName.textContent = "▶ " + tr("Replay") + " · " + lesson.emoji + " " + tr(lesson.title);
          stage.classList.add("replaying");
          hud.style.display = "block";
          replayBar.style.display = "flex";
@@ -1241,7 +1251,7 @@
          const mph = Math.round(DrivingCoach.mph(car.speed));
          const limit = coach.currentLimit;
          speedValue.textContent = mph;
-         gearLabel.textContent = car.speed < -0.02 ? "MPH · R" : "MPH"; // backing up
+         gearLabel.textContent = car.speed < -0.02 ? "MPH · " + tr("R") : "MPH"; // backing up
          speedo.classList.toggle("over", mph > limit + 3);
          limitValue.textContent = limit;
          schoolSign.hidden = limit == lesson.speedLimit;
@@ -1257,12 +1267,12 @@
 
          const route = sim.trip.route;
          const step = DrivingSchool.nextInstruction(route, car.fitness, turns);
-         const titles = { left: "Turn left", right: "Turn right", uturn: "Make a U-turn", arrive: "Arrive" };
+         const titles = { left: tr("Turn left"), right: tr("Turn right"), uturn: tr("Make a U-turn"), arrive: tr("Arrive") };
          const far = step.kind != "arrive" && step.distance > 2500;
          const pullOver = parkingSpot && step.kind == "arrive";
-         navTitle.textContent = car.arrived ? "You've arrived" : far ? "Continue straight"
-            : pullOver ? (parkingSpot.parallel ? "Parallel park at the P" : "Pull over at the P") : titles[step.kind];
-         navDistance.textContent = car.arrived ? "Nice driving!" : (far ? "for " : "in ") + formatFeet(step.distance);
+         navTitle.textContent = car.arrived ? tr("You've arrived") : far ? tr("Continue straight")
+            : pullOver ? tr(parkingSpot.parallel ? "Parallel park at the P" : "Pull over at the P") : titles[step.kind];
+         navDistance.textContent = car.arrived ? tr("Nice driving!") : tr(far ? "for {distance}" : "in {distance}", { distance: formatFeet(step.distance) });
          const arrow = car.arrived ? "arrive" : far ? "straight" : step.kind;
          if (navArrow.dataset.kind != arrow) {
             navArrow.dataset.kind = arrow;
@@ -1289,8 +1299,8 @@
 
       // The demo driver's words, as a caption under the directions
       function say(line) {
-         captionTitle.textContent = line.title;
-         captionTip.textContent = line.tip || "";
+         captionTitle.textContent = tr(line.title, line.vars);
+         captionTip.textContent = tr(line.tip || "", line.vars);
          caption.hidden = false;
          caption.classList.remove("fresh");
          void caption.offsetWidth; // restart the animation
@@ -1307,9 +1317,10 @@
          const note = event.severity == "good" ? "" : event.tip || "";
          el.innerHTML =
             "<span class='t-icon'>" + icons[event.severity] + "</span><div><b></b><small></small></div>";
-         el.querySelector("b").textContent = event.title + (penalty ? "  −" + penalty : "") +
-            (event.detail ? " · " + event.detail : "");
-         el.querySelector("small").textContent = note;
+         const detail = event.detailKey ? tr(event.detailKey, event.detailVars) : event.detail;
+         el.querySelector("b").textContent = tr(event.title, event.vars) + (penalty ? "  −" + penalty : "") +
+            (detail ? " · " + detail : "");
+         el.querySelector("small").textContent = tr(note, event.vars);
          toasts.prepend(el);
          while (toasts.children.length > 3) {
             toasts.lastChild.remove();
@@ -1333,43 +1344,44 @@
          reportGrade.textContent = finished ? s.grade : "–";
          reportGrade.classList.toggle("fail", !passed);
          const hitByOther = coach.events.some((e) => e.rule == "hit_by_traffic");
-         reportTitle.textContent = demo && finished ? "That's how it's done 👀" : !finished
+         reportTitle.textContent = tr(demo && finished ? "That's how it's done 👀" : !finished
             ? hitByOther ? "Another car hit you" : endReason == "crash" ? "Crash! Drive over." : "Drive ended early"
             : passed
                ? exam ? "You passed the road test! 🎉" : "Lesson passed! 🎉"
-               : exam ? "Not this time. You'll get it." : "Almost! Let's try that again.";
-         reportSubtitle.textContent = (demo ? "Demo drive · " : "") +
-            lesson.emoji + " " + lesson.title + " · " + cityName() + " · score " + s.score + "/100" +
-            (hitByOther ? " · not your fault" : s.failed ? " · critical mistake" : passed ? "" : " · " + DrivingCoach.PASS_SCORE + " to pass");
+               : exam ? "Not this time. You'll get it." : "Almost! Let's try that again.");
+         reportSubtitle.textContent = (demo ? tr("Demo drive") + " · " : "") +
+            lesson.emoji + " " + tr(lesson.title) + " · " + cityName() + " · " + tr("score {score}/100", { score: s.score }) +
+            (hitByOther ? " · " + tr("not your fault") : s.failed ? " · " + tr("critical mistake") : passed ? ""
+               : " · " + tr("{score} to pass", { score: DrivingCoach.PASS_SCORE }));
 
          const minutes = Math.floor(s.minutes);
          const seconds = Math.round((s.minutes - minutes) * 60);
          const stats = [
-            [formatFeet(s.distanceMeters * Osm.UNITS_PER_METER), "driven"],
-            [minutes + ":" + String(seconds).padStart(2, "0"), "time"],
-            [s.topSpeed + " mph", "top speed"],
-            lesson.id == "phone" ? [formatFeet(phone ? phone.totalBlindDistance : 0), "driven without looking"]
+            [formatFeet(s.distanceMeters * Osm.UNITS_PER_METER), tr("driven")],
+            [minutes + ":" + String(seconds).padStart(2, "0"), tr("time")],
+            [s.topSpeed + " mph", tr("top speed")],
+            lesson.id == "phone" ? [formatFeet(phone ? phone.totalBlindDistance : 0), tr("driven without looking")]
             : lesson.id == "hazards" ? [
                hazards && hazards.averageReaction != null ? hazards.averageReaction.toFixed(1) + " s" : "–",
-               "avg reaction (most drivers: 1.5 s)",
+               tr("avg reaction (most drivers: 1.5 s)"),
             ]
-            : lesson.id == "parallel" ? [coach.stats.moves + 1, "moves to park"]
-            : lesson.id == "stops" ? [s.fullStops, "full stops"]
-               : lesson.id == "pedestrians" ? [s.praise.filter((e) => e.rule == "yielded_pedestrian").length, "people yielded to"]
-                  : [s.signaledTurns + "/" + s.turns, "turns signaled"],
+            : lesson.id == "parallel" ? [coach.stats.moves + 1, tr("moves to park")]
+            : lesson.id == "stops" ? [s.fullStops, tr("full stops")]
+               : lesson.id == "pedestrians" ? [s.praise.filter((e) => e.rule == "yielded_pedestrian").length, tr("people yielded to")]
+                  : [s.signaledTurns + "/" + s.turns, tr("turns signaled")],
          ];
          reportStats.innerHTML = stats.map(([v, label]) => "<div class='stat'><b>" + v + "</b><span>" + label + "</span></div>").join("");
 
          reportMistakes.innerHTML = s.mistakes.length == 0
-            ? "<p class='report-section'>Mistakes</p><ul class='report-list'><li>🌟 No mistakes. Clean drive!</li></ul>"
-            : "<p class='report-section'>What to work on</p><ul class='report-list'>" + groupEvents(s.mistakes).map((g) =>
+            ? "<p class='report-section'>" + tr("Mistakes") + "</p><ul class='report-list'><li>🌟 " + tr("No mistakes. Clean drive!") + "</li></ul>"
+            : "<p class='report-section'>" + tr("What to work on") + "</p><ul class='report-list'>" + groupEvents(s.mistakes).map((g) =>
                "<li><span>" + (g.severity == "critical" ? "❌" : g.severity == "major" ? "⛔" : "⚠️") + "</span><div><b>" +
-               escapeHtml(g.title) + (g.count > 1 ? " ×" + g.count : "") + "</b><span class='tip'>" + escapeHtml(g.tip) +
+               escapeHtml(tr(g.title)) + (g.count > 1 ? " ×" + g.count : "") + "</b><span class='tip'>" + escapeHtml(tr(g.tip)) +
                "</span></div><span class='pts'>−" + DrivingCoach.PENALTY[g.severity] * g.count + "</span>" +
-               "<button class='ghost small-btn watch' onclick='watchMistake(" + g.frame + ")' title='Watch this moment'>▶ Watch</button></li>").join("") + "</ul>";
+               "<button class='ghost small-btn watch' onclick='watchMistake(" + g.frame + ")' title='" + tr("Watch this moment") + "'>▶ " + tr("Watch") + "</button></li>").join("") + "</ul>";
          reportPraise.innerHTML = s.praise.length == 0 ? "" :
-            "<p class='report-section'>Nice work</p><ul class='report-list'>" + groupEvents(s.praise).map((g) =>
-               "<li><span>✅</span><div><b>" + escapeHtml(g.title) + (g.count > 1 ? " ×" + g.count : "") + "</b></div></li>").join("") + "</ul>";
+            "<p class='report-section'>" + tr("Nice work") + "</p><ul class='report-list'>" + groupEvents(s.praise).map((g) =>
+               "<li><span>✅</span><div><b>" + escapeHtml(tr(g.title)) + (g.count > 1 ? " ×" + g.count : "") + "</b></div></li>").join("") + "</ul>";
 
          const i = LESSONS.indexOf(lesson);
          nextLessonBtn.style.display = passed && !demo && i < LESSONS.length - 1 ? "" : "none";
@@ -1387,9 +1399,9 @@
             setSaved("school-history", JSON.stringify(Progress.add(getHistory(), drive)));
             const fresh = Badges.newlyEarned(before, currentBadges());
             if (fresh.length > 0) {
-               reportBadges.innerHTML = "<p class='report-section'>New badge" + (fresh.length > 1 ? "s" : "") + "</p><ul class='report-list'>" +
-                  fresh.map((b) => "<li class='new-badge'><span>" + b.emoji + "</span><div><b>" + b.title + "</b><span class='tip'>" +
-                  b.about + "</span></div></li>").join("") + "</ul>";
+               reportBadges.innerHTML = "<p class='report-section'>" + tr(fresh.length > 1 ? "New badges" : "New badge") + "</p><ul class='report-list'>" +
+                  fresh.map((b) => "<li class='new-badge'><span>" + b.emoji + "</span><div><b>" + tr(b.title) + "</b><span class='tip'>" +
+                  tr(b.about) + "</span></div></li>").join("") + "</ul>";
             }
          }
          certificateBtn.style.display = passed && exam && !demo ? "" : "none";
@@ -1424,41 +1436,41 @@
          const quiz = shared ? shared.quiz : getQuiz();
          const name = shared ? shared.name : getSaved("school-name") || "";
          const r = Progress.summarize(history, LESSONS, DrivingCoach.RULES);
-         progName.textContent = name || "Student driver";
-         progSub.textContent = (shared ? "Shared report" : "This device") + " · " +
-            new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+         progName.textContent = name || tr("Student driver");
+         progSub.textContent = tr(shared ? "Shared report" : "This device") + " · " +
+            new Date().toLocaleDateString(I18N.lang, { year: "numeric", month: "long", day: "numeric" });
          progStats.innerHTML = [
-            [r.lessonsPassed + "/" + r.lessonCount, "lessons passed"],
-            [r.drives, "drives"],
-            [r.minutes + " min", "practice"],
-            [r.roadTestPassed ? "✓ Passed" : "Not yet", "road test"],
-            [quiz && quiz.best != null ? quiz.best + "%" : "–", "permit quiz best"],
+            [r.lessonsPassed + "/" + r.lessonCount, tr("lessons passed")],
+            [r.drives, tr("drives")],
+            [r.minutes + " min", tr("practice")],
+            [r.roadTestPassed ? "✓ " + tr("Passed") : tr("Not yet"), tr("road test")],
+            [quiz && quiz.best != null ? quiz.best + "%" : "–", tr("permit quiz best")],
          ].map(([v, label]) => "<div class='stat'><b>" + v + "</b><span>" + label + "</span></div>").join("");
 
-         progLessons.innerHTML = "<tr><th>Lesson</th><th>Tries</th><th>Best</th><th></th></tr>" + r.lessons.map((l) =>
-            "<tr><td>" + l.emoji + " " + escapeHtml(l.title) + "</td><td>" + l.attempts + "</td><td>" +
+         progLessons.innerHTML = "<tr><th>" + tr("Lesson") + "</th><th>" + tr("Tries") + "</th><th>" + tr("Best") + "</th><th></th></tr>" + r.lessons.map((l) =>
+            "<tr><td>" + l.emoji + " " + escapeHtml(tr(l.title)) + "</td><td>" + l.attempts + "</td><td>" +
             (l.best == null ? "–" : l.best) + "</td><td>" +
-            (l.passed ? "<span class='badge good'>Passed</span>" : l.attempts ? "<span class='badge'>Practicing</span>" : "") +
+            (l.passed ? "<span class='badge good'>" + tr("Passed") + "</span>" : l.attempts ? "<span class='badge'>" + tr("Practicing") + "</span>" : "") +
             "</td></tr>").join("");
 
          progFocus.innerHTML = r.focus.length == 0
-            ? "<li>" + (r.drives ? "🌟 No repeat mistakes yet." : "No drives yet. Start with lesson 1!") + "</li>"
+            ? "<li>" + (r.drives ? "🌟 " + tr("No repeat mistakes yet.") : tr("No drives yet. Start with lesson 1!")) + "</li>"
             : r.focus.map((f) =>
                "<li><span>" + (f.severity == "critical" ? "❌" : f.severity == "major" ? "⛔" : "⚠️") + "</span><div><b>" +
-               escapeHtml(f.title) + " ×" + f.count + "</b><span class='tip'>" + escapeHtml(f.tip) + "</span></div></li>").join("");
+               escapeHtml(tr(f.title)) + " ×" + f.count + "</b><span class='tip'>" + escapeHtml(tr(f.tip)) + "</span></div></li>").join("");
 
-         const ended = { arrived: "Finished", crash: "Crashed", quit: "Stopped early" };
+         const ended = { arrived: tr("Finished"), crash: tr("Crashed"), quit: tr("Stopped early") };
          progRecent.innerHTML = r.recent.length == 0 ? "" :
-            "<tr><th>When</th><th>Lesson</th><th>Where</th><th>Result</th></tr>" + r.recent.map((d) => {
+            "<tr><th>" + tr("When") + "</th><th>" + tr("Lesson") + "</th><th>" + tr("Where") + "</th><th>" + tr("Result") + "</th></tr>" + r.recent.map((d) => {
                const l = LESSONS.find((x) => x.id == d.lesson);
-               return "<tr><td>" + new Date(d.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
-                  "</td><td>" + (l ? l.emoji + " " + escapeHtml(l.title) : "") + "</td><td>" + escapeHtml(d.city || "") +
+               return "<tr><td>" + new Date(d.date).toLocaleDateString(I18N.lang, { month: "short", day: "numeric" }) +
+                  "</td><td>" + (l ? l.emoji + " " + escapeHtml(tr(l.title)) : "") + "</td><td>" + escapeHtml(d.city || "") +
                   "</td><td>" + (d.ended == "arrived" ? d.score + "/100" + (d.passed ? " ✓" : "") : ended[d.ended]) + "</td></tr>";
             }).join("");
 
-         progNote.textContent = shared
+         progNote.textContent = tr(shared
             ? "This report was shared from the student's device. Practice in a simulator doesn't replace supervised driving."
-            : "Scores are saved on this device. Practice in a simulator doesn't replace supervised driving.";
+            : "Scores are saved on this device. Practice in a simulator doesn't replace supervised driving.");
          progShareBtn.style.display = shared || r.drives == 0 ? "none" : "";
          show(progressReport);
       }
@@ -1472,16 +1484,16 @@
       }
 
       function shareProgress() {
-         const name = getSaved("school-name") || prompt("Your name, for the report:") || "";
+         const name = getSaved("school-name") || prompt(tr("Your name, for the report:")) || "";
          if (name) setSaved("school-name", name);
          const url = location.origin + location.pathname + "#report=" + Progress.encode(name, getHistory(), getQuiz());
          if (navigator.clipboard) {
             navigator.clipboard.writeText(url).then(
-               () => { progShareBtn.textContent = "✓ Link copied"; },
-               () => prompt("Copy this link:", url)
+               () => { progShareBtn.textContent = "✓ " + tr("Link copied"); },
+               () => prompt(tr("Copy this link:"), url)
             );
          } else {
-            prompt("Copy this link:", url);
+            prompt(tr("Copy this link:"), url);
          }
       }
 
@@ -1498,9 +1510,9 @@
       function renderBadges() {
          const earned = new Set(currentBadges());
          badgeShelf.innerHTML = BADGES.map((b) =>
-            "<span class='badge-icon" + (earned.has(b.id) ? " earned" : "") + "' title='" + b.title + ": " + b.about +
-            (earned.has(b.id) ? " ✓" : " (locked)") + "'>" + b.emoji + "</span>").join("") +
-            "<span class='badge-count'>" + earned.size + "/" + BADGES.length + " badges</span>";
+            "<span class='badge-icon" + (earned.has(b.id) ? " earned" : "") + "' title='" + escapeHtml(tr(b.title) + ": " + tr(b.about) +
+            (earned.has(b.id) ? " ✓" : " (" + tr("locked") + ")")) + "'>" + b.emoji + "</span>").join("") +
+            "<span class='badge-count'>" + tr("{earned}/{count} badges", { earned: earned.size, count: BADGES.length }) + "</span>";
       }
 
       // ---------- certificate ----------
@@ -1509,10 +1521,10 @@
          const result = getProgress().roadtest;
          if (!result || !result.passed) return;
          certName.value = getSaved("school-name") || "";
-         certCity.textContent = result.city || "a real city";
+         certCity.textContent = result.city || tr("a real city");
          certScore.textContent = result.score + "/100";
          certGrade.textContent = result.grade;
-         certDate.textContent = new Date(result.date || Date.now()).toLocaleDateString(undefined, {
+         certDate.textContent = new Date(result.date || Date.now()).toLocaleDateString(I18N.lang, {
             year: "numeric", month: "long", day: "numeric",
          });
          show(certificate);
