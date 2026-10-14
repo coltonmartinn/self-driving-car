@@ -241,6 +241,51 @@ const DrivingSchool = {
       return best ? best.dest : null;
    },
 
+   // A marked space by the curb, near the end of the route, on a straight
+   // stretch away from junctions, crosswalks and signs (where real drivers
+   // can pull over)
+   parkingSpotOn(route, world) {
+      const rw = world.roadWidth;
+      const dirAt = (at) => normalize(subtract(route.pointAt(at + 10), route.pointAt(at - 10)));
+      const turnBetween = (a, b) => Math.abs(Math.atan2(a.x * b.y - a.y * b.x, dot(a, b)));
+      const markings = world.markings.filter((m) => m instanceof Crossing || m instanceof Stop || m instanceof Light || m instanceof Yield);
+      const fits = (at) => {
+         const p = route.pointAt(at);
+         const dir = dirAt(at);
+         return turnBetween(dirAt(at - 90), dir) < 0.12 && turnBetween(dir, dirAt(at + 90)) < 0.12 &&
+            world.intersections.every((j) => distance(j, p) > rw * 1.6) &&
+            markings.every((m) => distance(m.center, p) > rw * 1.2);
+      };
+      let at = Math.max(route.length * 0.6, route.length - 120);
+      for (let tryAt = at; tryAt > Math.max(150, route.length * 0.4); tryAt -= 20) {
+         if (fits(tryAt)) {
+            at = tryAt;
+            break;
+         }
+      }
+      const dir = dirAt(at);
+      const center = add(route.pointAt(at), scale(perpendicular(dir), rw / 2 - 24));
+      return new Parking(center, dir, 44, 90);
+   },
+
+   // How a student's car handles: gentle like a real car, a little faster
+   // than the limit at most, and with less grip on wet roads
+   setUpStudentCar(car, lesson) {
+      const unitsPerMph = 1 / DrivingCoach.MPH_PER_UNIT;
+      car.color = "#2457f5";
+      car.acceleration = 0.025;
+      car.friction = 0.008;
+      car.brakePower = 0.05;
+      car.maxSpeed = (lesson.speedLimit + 20) * unitsPerMph;
+      car.speedSteering = true;
+      car.turnRate = 0.032;
+      if (lesson.conditions && lesson.conditions.rain) {
+         car.brakePower = 0.032; // wet road: brakes grip less
+         car.friction = 0.006;
+      }
+      return car;
+   },
+
    // The next instruction for a driver at `progress` along the route
    nextInstruction(route, progress, turns = DrivingSchool.turnsOf(route)) {
       const next = turns.find((t) => t.at > progress - 20);

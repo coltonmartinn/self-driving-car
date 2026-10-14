@@ -1085,6 +1085,15 @@ body.app {
    border-left-color: var(--bad);
 }
 
+.toast.demo {
+   border-left-color: var(--accent);
+}
+
+/* a demo drive: the student watches, so no pedals */
+.demo .touch-controls {
+   display: none !important;
+}
+
 .toast .t-icon {
    font-size: 20px;
    line-height: 1.2;
@@ -1101,6 +1110,132 @@ body.app {
       opacity: 0;
       transform: translateY(10px) scale(0.98);
    }
+}
+
+/* ---------- replay ---------- */
+
+.replay-bar {
+   position: absolute;
+   z-index: 12;
+   left: 50%;
+   bottom: max(12px, env(safe-area-inset-bottom));
+   transform: translateX(-50%);
+   width: min(760px, calc(100% - 24px));
+   display: flex;
+   flex-direction: column;
+   gap: 8px;
+}
+
+.replay-controls {
+   display: flex;
+   align-items: center;
+   gap: 10px;
+   padding: 10px 12px;
+   background: var(--surface-glass);
+   border-radius: 16px;
+   box-shadow: var(--shadow-lg);
+   backdrop-filter: blur(6px);
+}
+
+.replay-play {
+   width: 44px;
+   flex: none;
+   font-size: 18px;
+}
+
+.replay-track {
+   position: relative;
+   flex: 1;
+   min-width: 0;
+   display: flex;
+   align-items: center;
+}
+
+.replay-track input {
+   width: 100%;
+   margin: 0;
+   accent-color: var(--accent);
+}
+
+/* where each mistake (and each bit of praise) happened */
+.replay-marks {
+   position: absolute;
+   inset: 0 8px;
+   pointer-events: none;
+}
+
+.replay-marks .mark {
+   position: absolute;
+   top: -6px;
+   width: 4px;
+   height: 10px;
+   margin-left: -2px;
+   border-radius: 2px;
+   background: var(--good);
+}
+
+.replay-marks .mark.minor {
+   background: var(--warn);
+}
+
+.replay-marks .mark.major,
+.replay-marks .mark.critical {
+   background: var(--bad);
+   height: 14px;
+   top: -8px;
+}
+
+.replay-time {
+   flex: none;
+   font-size: 13px;
+   font-weight: 700;
+   font-variant-numeric: tabular-nums;
+   color: var(--muted);
+}
+
+.replay-jumps {
+   display: flex;
+   flex-wrap: wrap;
+   justify-content: center;
+   gap: 6px;
+}
+
+.replay-jumps .chip {
+   min-height: 30px;
+   font-size: 13px;
+   background: var(--surface);
+   box-shadow: var(--shadow);
+}
+
+.replay-jumps .chip.minor {
+   border-color: var(--warn);
+}
+
+.replay-jumps .chip.major,
+.replay-jumps .chip.critical {
+   border-color: var(--bad);
+}
+
+/* while replaying: no directions, pedals or pause, and room for the bar */
+.replaying #navCard,
+.replaying .touch-controls,
+.replaying #pauseBtn {
+   display: none !important;
+}
+
+.replaying #dash {
+   bottom: auto;
+   top: 64px;
+}
+
+.replaying #toasts {
+   bottom: 150px;
+}
+
+.report-list li .watch {
+   flex: none;
+   align-self: center;
+   font-size: 12px;
 }
 
 /* on touch screens: steering bottom-left, pedals bottom-right, and the

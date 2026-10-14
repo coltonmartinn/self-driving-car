@@ -40,7 +40,7 @@
          <div id="hud" style="display: none">
             <div id="lessonBadge" class="hud">
                <span class="pill" id="lessonName"></span>
-               <button class="pill" onclick="pause()" title="Pause (Esc)">⏸ Pause</button>
+               <button class="pill" id="pauseBtn" onclick="pause()" title="Pause (Esc)">⏸ Pause</button>
                <button class="pill" id="muteBtn" onclick="toggleMute()" title="Sound on/off" aria-label="Sound on or off">🔊</button>
             </div>
 
@@ -72,6 +72,21 @@
                </div>
                <button class="pedal brake" data-control="reverse" aria-label="Brake">🛑</button>
                <button class="pedal" data-control="forward" aria-label="Gas">⬆️</button>
+            </div>
+         </div>
+
+         <!-- watch the drive again, with every mistake on the timeline -->
+         <div id="replayBar" class="replay-bar" style="display: none">
+            <div class="replay-jumps" id="replayJumps"></div>
+            <div class="replay-controls">
+               <button class="replay-play" id="replayPlay" onclick="toggleReplay()" aria-label="Play or pause (Space)">⏸</button>
+               <div class="replay-track">
+                  <div class="replay-marks" id="replayMarks"></div>
+                  <input id="replayRange" type="range" min="0" max="0" value="0" step="1" aria-label="Replay position">
+               </div>
+               <span class="replay-time" id="replayTime">0:00</span>
+               <button id="replaySpeedBtn" onclick="cycleReplaySpeed()" aria-label="Playback speed">1×</button>
+               <button class="primary" onclick="exitReplay()">Done</button>
             </div>
          </div>
 
@@ -124,6 +139,7 @@
                <p class="muted" id="introLimit"></p>
                <div class="card-actions">
                   <button class="ghost" onclick="showPicker()">← All lessons</button>
+                  <button onclick="beginDrive(false, true)" title="Watch a careful driver do this lesson first">👀 Show me first</button>
                   <button class="primary big" onclick="beginDrive(false)">Start driving</button>
                </div>
             </div>
@@ -156,7 +172,9 @@
                <div id="reportBadges"></div>
                <div class="card-actions">
                   <button class="ghost" onclick="showPicker()">All lessons</button>
-                  <button onclick="beginDrive(true)">↻ Try again</button>
+                  <button id="replayBtn" onclick="startReplay(0)">▶ Watch replay</button>
+                  <button id="tryAgainBtn" onclick="beginDrive(true)">↻ Try again</button>
+                  <button class="primary" id="yourTurnBtn" onclick="beginDrive(true)">Your turn: same route →</button>
                   <button class="primary" id="nextLessonBtn" onclick="nextLesson()">Next lesson →</button>
                   <button class="primary" id="certificateBtn" onclick="showCertificate()">🎓 Get your certificate</button>
                </div>
@@ -259,6 +277,8 @@
    <script src="js/school/hazards.js"></script>
    <script src="js/school/badges.js"></script>
    <script src="js/school/progress.js"></script>
+   <script src="js/school/replay.js"></script>
+   <script src="js/school/autopilot.js"></script>
    <script>
       const ctx = carCanvas.getContext("2d");
       const controls = new PlayerControls();
@@ -284,6 +304,10 @@
       let hazards = null; // surprise events, in the Hazards lesson
       let parkingSpot = null; // where to pull over, in the Pulling over lesson
       let stillFrames = 0;
+      let recorder = null; // the drive, for the replay
+      let pilot = null; // the demo driver, in a "Show me" drive
+      // the replay: position (a snapshot index), and stand-in cars to draw
+      const replay = { pos: 0, playing: true, speed: 1, marks: [], ghosts: [], player: null, saved: null, shown: -1 };
       const lightCanvas = document.createElement("canvas"); // night: where light falls
       const lightCtx = lightCanvas.getContext("2d");
       const raindrops = [];
@@ -296,6 +320,15 @@
          controls.bindButton(button);
       }
       document.addEventListener("keydown", (evt) => {
+         if (state == "replay") {
+            if (evt.key == " ") toggleReplay();
+            else if (evt.key == "ArrowLeft") seekReplay(-5);
+            else if (evt.key == "ArrowRight") seekReplay(5);
+            else if (evt.key == "Escape") exitReplay();
+            else return;
+            evt.preventDefault();
+            return;
+         }
          if ((evt.key == "Escape" || evt.key == "p" || evt.key == "P") && !evt.repeat) {
             if (state == "driving") pause();
             else if (state == "paused") resume();
@@ -508,7 +541,8 @@
 
       // ---------- driving ----------
 
-      function beginDrive(sameTrip) {
+      // demo: a careful driver drives and explains, and the student watches
+      function beginDrive(sameTrip, demo = false) {
          if (!world || !lesson) return;
          const unitsPerMph = 1 / DrivingCoach.MPH_PER_UNIT;
          const limit = lesson.speedLimit * unitsPerMph;
@@ -532,24 +566,13 @@
             }
          }
          sim.startGeneration();
-         car = sim.cars[0];
-         car.color = "#2457f5";
-         car.acceleration = 0.025;
-         car.friction = 0.008;
-         car.brakePower = 0.05;
-         car.maxSpeed = (lesson.speedLimit + 20) * unitsPerMph;
-         car.speedSteering = true;
-         car.turnRate = 0.032;
-
-         if (lesson.conditions && lesson.conditions.rain) {
-            car.brakePower = 0.032; // wet road: brakes grip less
-            car.friction = 0.006;
-         }
+         car = DrivingSchool.setUpStudentCar(sim.cars[0], lesson);
          coach = new DrivingCoach(world, car, {
             speedLimit: lesson.speedLimit, rules: lesson.rules, followSeconds: lesson.followSeconds || 2,
          });
          hazards = lesson.hazards ? new Hazards(sim) : null;
-         parkingSpot = lesson.pullover ? makeParkingSpot(sim.trip.route) : null;
+         parkingSpot = lesson.pullover ? DrivingSchool.parkingSpotOn(sim.trip.route, world) : null;
+         pilot = demo ? new Autopilot({ sim, car, coach, controls, lesson, parkingSpot }) : null;
          stillFrames = 0;
          if (parkingSpot) world.destination = parkingSpot;
          turns = DrivingSchool.turnsOf(sim.trip.route, DrivingSchool.junctionsOf(world));
@@ -558,18 +581,22 @@
          camera.angle = car.angle;
          camera.zoom = 1.1;
 
+         recorder = new DriveRecorder();
          controls.reset();
-         controls.enabled = true;
+         controls.enabled = !demo;
+         stage.classList.toggle("demo", demo);
          endTimer = -1;
          endReason = null;
          offRouteFrames = 0;
          toasts.innerHTML = "";
-         lessonName.textContent = lesson.emoji + " " + lesson.title;
+         lessonName.textContent = (demo ? "👀 Demo · " : "") + lesson.emoji + " " + lesson.title;
          limitValue.textContent = lesson.speedLimit;
          hud.style.display = "block";
          show(null);
          state = "driving";
-         toast({ severity: "info", title: "Follow the blue line to the 🏁", tip: "Gas to start. The coach is watching." }, 4000);
+         toast(demo
+            ? { severity: "info", title: "Watch how a careful driver does it", tip: "The coach grades this drive too. Your turn is next." }
+            : { severity: "info", title: "Follow the blue line to the 🏁", tip: "Gas to start. The coach is watching." }, 4000);
       }
 
       function pause() {
@@ -583,7 +610,7 @@
       function resume() {
          if (state != "paused") return;
          state = "driving";
-         controls.enabled = true;
+         controls.enabled = !pilot;
          show(null);
       }
 
@@ -609,6 +636,10 @@
       function animate() {
          if (world && sim) {
             if (state == "driving") {
+               if (pilot) {
+                  const line = pilot.update(turns);
+                  if (line) toast(line, 4500);
+               }
                sim.step();
                const others = sim.crowd ? [...sim.traffic, ...sim.crowd.people] : sim.traffic;
                for (const event of coach.update(others)) {
@@ -630,22 +661,20 @@
                   }
                }
                checkRoute();
-               followCar();
+               recorder.capture({
+                  coachFrame: coach.frame, worldFrame: world.frameCount, car,
+                  traffic: sim.traffic, people: sim.crowd ? sim.crowd.people : [], route: sim.trip.route,
+               });
+               followCar(car);
                updateHud();
+            } else if (state == "replay") {
+               stepReplay();
             } else if (state != "paused" && state != "report") {
                idle();
             }
             draw();
          }
          requestAnimationFrame(animate);
-      }
-
-      // A marked space by the curb, a little before the end of the route
-      function makeParkingSpot(route) {
-         const at = Math.max(route.length * 0.6, route.length - 120);
-         const dir = normalize(subtract(route.pointAt(at + 10), route.pointAt(at - 10)));
-         const center = add(route.pointAt(at), scale(perpendicular(dir), world.roadWidth / 2 - 24));
-         return new Parking(center, dir, 44, 90);
       }
 
       // Pulled up and stopped near the space for a second: judge the stop
@@ -675,16 +704,165 @@
       }
 
       // Behind the wheel: the view turns with the car, so "up" is always ahead
-      function followCar() {
+      function followCar(target) {
          const k = 0.15;
-         camera.x += (car.x - camera.x) * 0.5;
-         camera.y += (car.y - camera.y) * 0.5;
-         let diff = car.angle - camera.angle;
+         camera.x += (target.x - camera.x) * 0.5;
+         camera.y += (target.y - camera.y) * 0.5;
+         let diff = target.angle - camera.angle;
          diff = Math.atan2(Math.sin(diff), Math.cos(diff));
          camera.angle += diff * k;
          const small = Math.min(carCanvas.width, carCanvas.height) < 600 ? 1.5 : 1; // see more on phones
-         const targetZoom = (1.1 + Math.abs(car.speed) * 0.13) * small;
+         const targetZoom = (1.1 + Math.abs(target.speed) * 0.13) * small;
          camera.zoom += (targetZoom - camera.zoom) * 0.03;
+      }
+
+      // ---------- replay ----------
+
+      function startReplay(at = 0) {
+         if (!recorder || recorder.length < 2) return;
+         if (state != "replay") {
+            replay.saved = { frameCount: world.frameCount, traffic: world.traffic, crowd: world.crowd, route: world.route };
+         }
+         state = "replay";
+         replay.player = replay.player || new Car(0, 0, 30, 50, "DUMMY", 0, 0, "#2457f5");
+         replay.marks = recorder.markers(coach.events);
+         replay.pos = at;
+         replay.shown = at - 1;
+         replay.playing = true;
+         replayRange.max = String(recorder.length - 1);
+         replayMarks.innerHTML = replay.marks
+            .filter((m) => m.severity != "info")
+            .map((m) => "<span class='mark " + m.severity + "' style='left:" + (m.at * 100).toFixed(2) + "%' title='" +
+               escapeHtml(m.title) + "'></span>").join("");
+         const mistakes = replay.marks.filter((m) => DrivingCoach.PENALTY[m.severity]);
+         replayJumps.innerHTML = mistakes.map((m, i) =>
+            "<button class='chip " + m.severity + "' data-jump='" + i + "'>" + (m.severity == "minor" ? "⚠️ " : "⛔ ") +
+            escapeHtml(m.title) + " · " + formatClock(recorder.snapshots[m.index].coachFrame) + "</button>").join("");
+         replayJumps.querySelectorAll("[data-jump]").forEach((b) => {
+            b.addEventListener("click", () => jumpTo(recorder.leadIn(mistakes[Number(b.getAttribute("data-jump"))].index)));
+         });
+         toasts.innerHTML = "";
+         lessonName.textContent = "▶ Replay · " + lesson.emoji + " " + lesson.title;
+         stage.classList.add("replaying");
+         hud.style.display = "block";
+         replayBar.style.display = "flex";
+         show(null);
+         applySnapshot(recorder.snapshots[Math.floor(replay.pos)]);
+         const first = recorder.snapshots[Math.floor(replay.pos)].car;
+         Object.assign(camera, { x: first.x, y: first.y, angle: first.angle });
+      }
+
+      // Jump to a moment where a mistake happened
+      function watchMistake(frame) {
+         startReplay(recorder.leadIn(recorder.indexOfFrame(frame)));
+      }
+
+      function exitReplay() {
+         if (state != "replay") return;
+         Object.assign(world, { traffic: replay.saved.traffic, crowd: replay.saved.crowd, route: replay.saved.route });
+         world.frameCount = replay.saved.frameCount;
+         stage.classList.remove("replaying");
+         replayBar.style.display = "none";
+         hud.style.display = "none";
+         toasts.innerHTML = "";
+         state = "report";
+         show(reportCard);
+      }
+
+      function toggleReplay() {
+         if (replay.pos >= recorder.length - 1) jumpTo(0);
+         replay.playing = !replay.playing;
+         replayPlay.textContent = replay.playing ? "⏸" : "▶";
+      }
+
+      function cycleReplaySpeed() {
+         replay.speed = replay.speed == 1 ? 2 : replay.speed == 2 ? 0.5 : 1;
+         replaySpeedBtn.textContent = replay.speed + "×";
+      }
+
+      function seekReplay(seconds) {
+         jumpTo(replay.pos + (seconds * 60) / recorder.every);
+      }
+
+      function jumpTo(index) {
+         replay.pos = Math.max(0, Math.min(recorder.length - 1, index));
+         replay.shown = Math.floor(replay.pos) - 1; // don't re-announce what came before
+         toasts.innerHTML = "";
+      }
+
+      replayRange.addEventListener("input", () => jumpTo(Number(replayRange.value)));
+
+      function stepReplay() {
+         if (replay.playing) {
+            replay.pos += replay.speed / recorder.every;
+            if (replay.pos >= recorder.length - 1) {
+               replay.pos = recorder.length - 1;
+               replay.playing = false;
+               replayPlay.textContent = "↻";
+            }
+         }
+         const index = Math.floor(replay.pos);
+         const snap = recorder.snapshots[index];
+         applySnapshot(snap);
+         // announce mistakes and praise as the replay passes them
+         for (const m of replay.marks) {
+            if (m.index > replay.shown && m.index <= index && m.severity != "info") toast(m.event);
+         }
+         replay.shown = index;
+         replayRange.value = String(index);
+         replayTime.textContent = formatClock(snap.coachFrame) + " / " + formatClock(recorder.snapshots[recorder.length - 1].coachFrame);
+         followCar(replay.player);
+         updateReplayHud(snap);
+      }
+
+      // Put every car and person where they were in the snapshot
+      function applySnapshot(snap) {
+         world.frameCount = snap.worldFrame - 1;
+         world.update(); // the lights, as they were
+         world.route = snap.route;
+         poseGhost(replay.player, snap.car);
+         replay.player.color = "#2457f5";
+         while (replay.ghosts.length < snap.traffic.length) {
+            replay.ghosts.push(new Car(0, 0, 30, 50, "DUMMY", 0, 0, "#888"));
+         }
+         world.traffic = snap.traffic.map((p, i) => poseGhost(replay.ghosts[i], p));
+         const people = snap.people.map((p) => Object.assign(Object.create(Pedestrian.prototype), p));
+         world.crowd = { people, draw: (c) => people.forEach((p) => p.draw(c)) };
+      }
+
+      function poseGhost(ghost, p) {
+         ghost.width = p.width;
+         ghost.height = p.height;
+         ghost.place(p.x, p.y, p.angle);
+         ghost.color = p.color;
+         ghost.speed = p.speed;
+         ghost.damaged = p.damaged;
+         ghost.arrived = p.arrived;
+         ghost.siren = p.siren;
+         ghost.controls.forward = false;
+         ghost.controls.reverse = p.braking;
+         ghost.controls.signal = p.signal;
+         return ghost;
+      }
+
+      function updateReplayHud(snap) {
+         const mph = Math.round(DrivingCoach.mph(snap.car.speed));
+         speedValue.textContent = mph;
+         speedo.classList.toggle("over", mph > lesson.speedLimit + 3);
+         const blinkOn = Math.floor(Date.now() / 350) % 2 == 0;
+         signalLeft.classList.toggle("on", snap.car.signal == "left" && blinkOn);
+         signalRight.classList.toggle("on", snap.car.signal == "right" && blinkOn);
+         let score = 100;
+         for (const e of coach.events) {
+            if (e.frame <= snap.coachFrame) score -= DrivingCoach.PENALTY[e.severity] || 0;
+         }
+         scoreValue.textContent = Math.max(0, score);
+         scoreValue.style.color = score >= DrivingCoach.PASS_SCORE ? "var(--good)" : "var(--warn)";
+      }
+
+      function formatClock(frames) {
+         const s = Math.floor(frames / 60);
+         return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
       }
 
       // Between drives: traffic keeps moving and the view slowly circles
@@ -701,7 +879,8 @@
       function draw() {
          const w = carCanvas.width;
          const h = carCanvas.height;
-         const driving = state == "driving" || state == "paused" || state == "report";
+         const driving = state == "driving" || state == "paused" || state == "report" || state == "replay";
+         const me = state == "replay" ? replay.player : car;
          ctx.setTransform(1, 0, 0, 1, 0, 0);
          ctx.clearRect(0, 0, w, h);
          ctx.translate(w / 2, driving ? h * 0.64 : h / 2);
@@ -710,18 +889,18 @@
          ctx.translate(-camera.x, -camera.y);
          const view = new Point(camera.x, camera.y);
          world.draw(ctx, view, false, Math.hypot(w, h) * camera.zoom + 300);
-         if (driving && car) {
-            car.draw(ctx); // on top, so tall buildings never hide you
+         if (driving && me) {
+            me.draw(ctx); // on top, so tall buildings never hide you
          }
          const conditions = driving && lesson && lesson.conditions;
-         if (conditions && conditions.night) drawNight(view);
+         if (conditions && conditions.night) drawNight(view, me);
          if (conditions && conditions.rain) drawRain(!conditions.night);
       }
 
       // ---------- night and rain ----------
 
       // Darkness everywhere except where headlights and streetlights shine
-      function drawNight(view) {
+      function drawNight(view, me) {
          const w = carCanvas.width;
          const h = carCanvas.height;
          if (lightCanvas.width != w || lightCanvas.height != h) {
@@ -766,15 +945,15 @@
             l.lineTo(add(tip, scale(side, -length * 0.45)).x, add(tip, scale(side, -length * 0.45)).y);
             l.lineTo(b.x, b.y);
             l.fill();
-            glow(c.x, c.y, c == car ? 110 : 45, 0.55); // the car (and around yours) stays visible
+            glow(c.x, c.y, c == me ? 110 : 45, 0.55); // the car (and around yours) stays visible
          };
-         for (const t of sim.traffic) {
+         for (const t of world.traffic) {
             if (distance(t, view) < far) beam(t, 230, 0.85);
          }
-         if (sim.crowd) {
-            for (const p of sim.crowd.people) glow(p.x, p.y, 26, 0.35);
+         if (world.crowd) {
+            for (const p of world.crowd.people) glow(p.x, p.y, 26, 0.35);
          }
-         beam(car, 380, 0.95);
+         beam(me, 380, 0.95);
 
          ctx.save();
          ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -799,7 +978,7 @@
          ctx.lineWidth = 1.3;
          ctx.beginPath();
          for (const d of raindrops) {
-            if (state == "driving") {
+            if (state == "driving" || (state == "replay" && replay.playing)) {
                d.y += d.v;
                d.x -= d.v * 0.25;
                if (d.y > h || d.x < 0) {
@@ -863,7 +1042,7 @@
       };
 
       function toast(event, ms) {
-         const icons = { good: "✅", minor: "⚠️", major: "⛔", critical: "❌", info: "👋" };
+         const icons = { good: "✅", minor: "⚠️", major: "⛔", critical: "❌", info: "👋", demo: "🗣️" };
          const el = document.createElement("div");
          el.className = "toast " + event.severity;
          const penalty = DrivingCoach.PENALTY[event.severity];
@@ -889,18 +1068,19 @@
       function showReport() {
          const s = coach.summary();
          const finished = endReason == "arrived";
+         const demo = !!pilot;
          const passed = finished && s.passed;
          const exam = lesson.id == "roadtest";
 
          reportGrade.textContent = finished ? s.grade : "–";
          reportGrade.classList.toggle("fail", !passed);
          const hitByOther = coach.events.some((e) => e.rule == "hit_by_traffic");
-         reportTitle.textContent = !finished
+         reportTitle.textContent = demo && finished ? "That's how it's done 👀" : !finished
             ? hitByOther ? "Another car hit you" : endReason == "crash" ? "Crash! Drive over." : "Drive ended early"
             : passed
                ? exam ? "You passed the road test! 🎉" : "Lesson passed! 🎉"
                : exam ? "Not this time. You'll get it." : "Almost! Let's try that again.";
-         reportSubtitle.textContent =
+         reportSubtitle.textContent = (demo ? "Demo drive · " : "") +
             lesson.emoji + " " + lesson.title + " · " + cityName() + " · score " + s.score + "/100" +
             (hitByOther ? " · not your fault" : s.failed ? " · critical mistake" : passed ? "" : " · " + DrivingCoach.PASS_SCORE + " to pass");
 
@@ -925,19 +1105,22 @@
             : "<p class='report-section'>What to work on</p><ul class='report-list'>" + groupEvents(s.mistakes).map((g) =>
                "<li><span>" + (g.severity == "critical" ? "❌" : g.severity == "major" ? "⛔" : "⚠️") + "</span><div><b>" +
                escapeHtml(g.title) + (g.count > 1 ? " ×" + g.count : "") + "</b><span class='tip'>" + escapeHtml(g.tip) +
-               "</span></div><span class='pts'>−" + DrivingCoach.PENALTY[g.severity] * g.count + "</span></li>").join("") + "</ul>";
+               "</span></div><span class='pts'>−" + DrivingCoach.PENALTY[g.severity] * g.count + "</span>" +
+               "<button class='ghost small-btn watch' onclick='watchMistake(" + g.frame + ")' title='Watch this moment'>▶ Watch</button></li>").join("") + "</ul>";
          reportPraise.innerHTML = s.praise.length == 0 ? "" :
             "<p class='report-section'>Nice work</p><ul class='report-list'>" + groupEvents(s.praise).map((g) =>
                "<li><span>✅</span><div><b>" + escapeHtml(g.title) + (g.count > 1 ? " ×" + g.count : "") + "</b></div></li>").join("") + "</ul>";
 
          const i = LESSONS.indexOf(lesson);
-         nextLessonBtn.style.display = passed && i < LESSONS.length - 1 ? "" : "none";
-         if (finished) {
+         nextLessonBtn.style.display = passed && !demo && i < LESSONS.length - 1 ? "" : "none";
+         yourTurnBtn.style.display = demo ? "" : "none";
+         tryAgainBtn.style.display = demo ? "none" : "";
+         if (finished && !demo) {
             saveResult(lesson.id, s, passed);
             sounds.finish(passed);
          }
          reportBadges.innerHTML = "";
-         if (coach.frame > 300) {
+         if (coach.frame > 300 && !demo) {
             // every real attempt counts toward the progress report
             const before = currentBadges();
             const drive = Progress.record(lesson, s, { ended: endReason, city: cityName() });
@@ -949,7 +1132,8 @@
                   b.about + "</span></div></li>").join("") + "</ul>";
             }
          }
-         certificateBtn.style.display = passed && exam ? "" : "none";
+         certificateBtn.style.display = passed && exam && !demo ? "" : "none";
+         replayBtn.style.display = recorder && recorder.length > 30 ? "" : "none";
          show(reportCard);
       }
 

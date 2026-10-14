@@ -165,18 +165,23 @@ class TrafficCar extends Car {
       }
       for (const other of otherTraffic) {
          if (other == this || (ghost && !other.isPlayer && !other.isPedestrian)) continue;
-         if (other.isPedestrian && !other.onRoad) continue; // still on the sidewalk
+         if (other.isPedestrian && (!other.onRoad || other.blockedBy == this)) continue; // on the sidewalk, or waiting for us
          const rel = new Point(other.x - this.x, other.y - this.y);
          const along = dot(rel, heading);
          if (along <= 0 || along > 160) continue;
          const lateral = Math.abs(rel.x * heading.y - rel.y * heading.x);
+         // a human driver close in front (even off to the side, e.g. while
+         // turning a corner) gets a full stop: never bump into a student
+         const closePlayer = other.isPlayer && along > 10 && along < 100 && lateral < 60;
          // anyone walking across the road ahead, in either lane, gets to finish
-         if (lateral > (other.isPedestrian ? 80 : other.isPlayer ? 45 : 28)) continue;
-         const limit = stoppingSpeed(along - 75);
+         if (!closePlayer && lateral > (other.isPedestrian ? 80 : other.isPlayer ? 45 : 28)) continue;
+         const limit = closePlayer ? 0 : stoppingSpeed(along - 75);
+         if (limit < this.cruiseSpeed && other.isPlayer && Math.abs(other.speed) < 0.1) {
+            blockedByPlayer = true; // (even if someone else is in the way too)
+         }
          if (limit < targetSpeed) {
             targetSpeed = limit;
             blocked = true;
-            blockedByPlayer = other.isPlayer && Math.abs(other.speed) < 0.1;
          }
       }
 

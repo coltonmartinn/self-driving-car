@@ -15,6 +15,7 @@ class Pedestrian {
       this.skin = Pedestrian.SKIN[Math.floor(random() * Pedestrian.SKIN.length)];
       this.isPedestrian = true;
       this.jaywalking = false; // crossing away from a crosswalk (a Driving School hazard)
+      this.blockedBy = null; // a stopped car in their way, that they're waiting on
       this.x = 0;
       this.y = 0;
       this.polygon = [];
@@ -44,7 +45,23 @@ class Pedestrian {
          }
       } else if (this.state == "crossing") {
          const [a, b] = this.ends;
-         this.t = Math.min(1, this.t + this.speed / distance(a, b));
+         const length = distance(a, b);
+         // nobody walks into the side of a car: they wait for it to move on
+         // (and it shouldn't wait for them). Only a car driving into
+         // someone hits them.
+         const ahead = lerp2D(a, b, Math.min(1, this.t + 22 / length));
+         const r = 10;
+         const step = [
+            { x: ahead.x - r, y: ahead.y - r }, { x: ahead.x + r, y: ahead.y - r },
+            { x: ahead.x + r, y: ahead.y + r }, { x: ahead.x - r, y: ahead.y + r },
+         ];
+         this.blockedBy = cars.find((c) =>
+            c.polygon && Math.abs(c.x - ahead.x) < 80 && Math.abs(c.y - ahead.y) < 80 &&
+            polysIntersect(step, c.polygon)
+         ) || null;
+         if (!this.blockedBy) {
+            this.t = Math.min(1, this.t + this.speed / length);
+         }
          if (this.t >= 1) {
             this.state = "done";
          }

@@ -215,7 +215,7 @@ class DrivingCoach {
             this.report("curb");
          } else if (other.isPedestrian) {
             this.report("hit_pedestrian");
-         } else if (Math.abs(car.speed) < 0.3 && Math.abs(other.speed) > 0.3) {
+         } else if (Math.abs(car.speed) < 0.1 || (Math.abs(car.speed) < 0.3 && Math.abs(other.speed) > 0.3)) {
             this.report("hit_by_traffic"); // we were (nearly) stopped: they hit us
          } else {
             this.report("crash");
@@ -486,13 +486,17 @@ class DrivingCoach {
       if (!this.turn && junction && Math.abs(car.speed) > 0.2) {
          this.turn = {
             junction,
-            startAngle: car.angle,
+            lastAngle: car.angle,
+            change: 0, // added up frame by frame, so two quick turns can't wrap around to look like one the other way
             signals: new Set(this.frame - this.lastSignal.frame < 180 ? [this.lastSignal.side] : []),
          };
       }
       if (!this.turn) {
          return;
       }
+      let step = car.angle - this.turn.lastAngle;
+      this.turn.change += Math.atan2(Math.sin(step), Math.cos(step));
+      this.turn.lastAngle = car.angle;
       if (signal) {
          this.turn.signals.add(signal);
       }
@@ -500,8 +504,7 @@ class DrivingCoach {
          return;
       }
       // left the junction
-      let change = car.angle - this.turn.startAngle;
-      change = Math.atan2(Math.sin(change), Math.cos(change));
+      const change = this.turn.change;
       const signals = this.turn.signals;
       this.turn = null;
       if (Math.abs(change) < 0.7) {

@@ -67,6 +67,14 @@ class Car {
       }
    }
 
+   // Put the car somewhere without driving it there (e.g. replaying a drive)
+   place(x, y, angle) {
+      this.x = x;
+      this.y = y;
+      this.angle = angle;
+      this.polygon = this.#createPolygon();
+   }
+
    #assessDamage(roadBorders, traffic) {
       for (const border of roadBorders) {
          if (polysIntersect(this.polygon, border)) {

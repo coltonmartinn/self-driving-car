@@ -6,7 +6,7 @@ const { loadApp } = require("./helpers/loadApp");
 
 const {
    Point, Segment, Graph, World, Car, Light, Stop, Route, Simulation, Crossing,
-   WorldGenerator, DrivingSchool, DrivingCoach, LESSONS, distance, Pedestrian, Crowd, TrafficCar, TrafficNetwork, Hazards, Parking, perpendicular, add, scale,
+   WorldGenerator, DrivingSchool, DrivingCoach, LESSONS, distance, Pedestrian, Crowd, TrafficCar, TrafficNetwork, Hazards, Parking, perpendicular, add, scale, normalize, subtract,
 } = loadApp({ seed: 3 });
 
 // A road going north from (0, 0), with a road to the east at y = -1500
@@ -198,11 +198,22 @@ test("a crash fails the drive and ends the coaching", () => {
    const car = studentCar(world);
    const coach = new DrivingCoach(world, car);
    const other = new Car(car.x, car.y - 30, 30, 50, "DUMMY");
+   car.speed = 1.5; // drove into it
    car.damaged = true;
    coach.update([other]);
    assert.equal(coach.finished, true);
    assert.equal(coach.summary().passed, false);
    assert.equal(coach.mistakes.map((e) => e.rule).join(), "crash");
+
+   // stopped, and another car ran into us: not the student's fault
+   const waiting = studentCar(world);
+   const coach3 = new DrivingCoach(world, waiting);
+   const hitter = new Car(waiting.x, waiting.y - 30, 30, 50, "DUMMY");
+   hitter.speed = 0.15; // it braked, but too late
+   waiting.damaged = true;
+   coach3.update([hitter]);
+   assert.equal(coach3.events.map((e) => e.rule).join(), "hit_by_traffic");
+   assert.equal(coach3.mistakes.length, 0);
 
    const alone = studentCar(world);
    const coach2 = new DrivingCoach(world, alone);
@@ -497,4 +508,38 @@ test("pulling over is judged on signaling, position and angle", () => {
    assert.equal(park(0, 0, 0.4, true), "crooked_park");
    assert.equal(park(0, 200, 0, true), "missed_spot", "stopped short");
    assert.equal(park(-60, 0, 0, true), "missed_spot", "too far from the curb");
+});
+
+test("people never walk into the side of a car blocking the crosswalk; they wait, then go on", () => {
+   const { crossing } = withCrosswalk();
+   const person = walkerOn(crossing);
+   const [a, b] = person.ends;
+   const ahead = add(person, scale(normalize(subtract(b, a)), 30));
+   const blocker = new Car(ahead.x, ahead.y, 30, 50, "DUMMY", 0, 0);
+   blocker.controls.forward = false;
+   blocker.update([], []);
+   const t = person.t;
+   for (let i = 0; i < 200; i++) person.update([blocker]);
+   assert.equal(person.t, t, "waited");
+   assert.equal(person.blockedBy, blocker);
+   blocker.place(ahead.x, ahead.y - 400, 0); // it drives on
+   for (let i = 0; i < 1000 && person.state != "done"; i++) person.update([blocker]);
+   assert.equal(person.state, "done");
+});
+
+test("two quick turns the same way are judged as turns that way, not as one turn back", () => {
+   const { world } = tJunction();
+   const car = studentCar(world, -1500 + 60, 0);
+   car.controls.signal = "right";
+   const coach = new DrivingCoach(world, car);
+   coach.update([]);
+   // inside the junction, the car swings right by almost 180 degrees in all
+   for (let i = 0; i < 40; i++) {
+      car.angle -= 3.1 / 40;
+      car.speed = 1;
+      coach.update([]);
+   }
+   car.x = world.roadWidth * 3; // and drives out of the junction
+   coach.update([]);
+   assert.equal(coach.events.map((e) => e.rule).join(), "signaled");
 });
