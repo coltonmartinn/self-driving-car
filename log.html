@@ -44,8 +44,14 @@
          </div>
          <p class="muted no-print">
             Log real drives with a licensed adult. Most states require a set number of supervised hours
-            (often 40–60, some of them at night) before a road test. Check your state's rules and set your goal below.
+            (often 40–60, some of them at night) before a road test. Pick your state to fill in its goal.
          </p>
+         <div class="state-row no-print">
+            <label>Your state
+               <select id="stateSelect"><option value="">Choose…</option></select>
+            </label>
+            <span class="muted" id="stateNote"></span>
+         </div>
 
          <div class="goal-row">
             <div class="goal">
@@ -132,6 +138,22 @@
       fDate.value = new Date().toISOString().slice(0, 10);
       goalHours.value = goal.hours;
       goalNight.value = goal.nightHours;
+      for (const [code, state] of Object.entries(PracticeLog.STATES).sort((a, b) => a[1].name.localeCompare(b[1].name))) {
+         const option = document.createElement("option");
+         option.value = code;
+         option.textContent = state.name;
+         stateSelect.append(option);
+      }
+      stateSelect.value = goal.state || "";
+      stateSelect.addEventListener("change", () => {
+         const g = PracticeLog.goalFor(stateSelect.value);
+         if (!g) return;
+         goal = g;
+         goalHours.value = goal.hours;
+         goalNight.value = goal.nightHours;
+         store("practice-goal", goal);
+         render();
+      });
       for (const c of PracticeLog.CONDITIONS) {
          const chip = document.createElement("button");
          chip.type = "button";
@@ -146,7 +168,7 @@
 
       for (const input of [goalHours, goalNight]) {
          input.addEventListener("change", () => {
-            goal = { hours: Math.max(1, Number(goalHours.value) || 50), nightHours: Math.max(0, Number(goalNight.value) || 0) };
+            goal = { hours: Math.max(1, Number(goalHours.value) || 50), nightHours: Math.max(0, Number(goalNight.value) || 0), state: goal.state };
             store("practice-goal", goal);
             render();
          });
@@ -175,6 +197,11 @@
 
       function render() {
          const t = PracticeLog.totals(entries, goal);
+         const st = PracticeLog.STATES[goal.state];
+         stateNote.textContent = st
+            ? st.name + ": " + (st.hours ? st.hours + " hours" + (st.night ? ", " + st.night + " at night" : "") : "no state minimum") +
+               ". " + (st.note ? st.note + " " : "") + "Laws change: check with your DMV."
+            : "";
          const name = localStorage.getItem("school-name");
          logWho.textContent = (name ? name + " · " : "") + t.sessions + " drive" + (t.sessions == 1 ? "" : "s") + " logged";
          hoursText.textContent = t.hours.toFixed(1) + " h";

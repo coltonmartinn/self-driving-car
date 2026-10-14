@@ -23,6 +23,70 @@ const PracticeLog = {
       pullover_signal: "Practice pulling over to the curb on a quiet street, signaling first every time.",
    },
 
+   // Supervised practice each state asks for with a learner's permit
+   // (hours, of which at night). From the IIHS graduated licensing table,
+   // October 2026; laws change, so the log says to check with the DMV.
+   STATES: {
+      AL: { name: "Alabama", hours: 50, night: 0, note: "None needed with driver education." },
+      AK: { name: "Alaska", hours: 40, night: 10 },
+      AZ: { name: "Arizona", hours: 30, night: 10, note: "None needed with driver education." },
+      AR: { name: "Arkansas", hours: 0, night: 0, note: "No state minimum. Experts suggest at least 50 hours, 10 at night." },
+      CA: { name: "California", hours: 50, night: 10 },
+      CO: { name: "Colorado", hours: 50, night: 10 },
+      CT: { name: "Connecticut", hours: 40, night: 0 },
+      DE: { name: "Delaware", hours: 50, night: 10 },
+      DC: { name: "District of Columbia", hours: 40, night: 0, note: "10 night hours are also required later, with the provisional license." },
+      FL: { name: "Florida", hours: 50, night: 10 },
+      GA: { name: "Georgia", hours: 40, night: 6 },
+      HI: { name: "Hawaii", hours: 50, night: 10 },
+      ID: { name: "Idaho", hours: 50, night: 10 },
+      IL: { name: "Illinois", hours: 50, night: 10 },
+      IN: { name: "Indiana", hours: 50, night: 10 },
+      IA: { name: "Iowa", hours: 20, night: 2 },
+      KS: { name: "Kansas", hours: 50, night: 10, note: "25 hours with the learner permit; 50 in total (10 at night) before a full license." },
+      KY: { name: "Kentucky", hours: 60, night: 10 },
+      LA: { name: "Louisiana", hours: 50, night: 15 },
+      ME: { name: "Maine", hours: 70, night: 10 },
+      MD: { name: "Maryland", hours: 60, night: 10 },
+      MA: { name: "Massachusetts", hours: 40, night: 0, note: "30 hours if you complete a driver skills program." },
+      MI: { name: "Michigan", hours: 50, night: 10 },
+      MN: { name: "Minnesota", hours: 40, night: 15 },
+      MS: { name: "Mississippi", hours: 0, night: 0, note: "No state minimum. Experts suggest at least 50 hours, 10 at night." },
+      MO: { name: "Missouri", hours: 40, night: 10 },
+      MT: { name: "Montana", hours: 50, night: 10, note: "75 hours (15 at night) with the parent-taught course." },
+      NE: { name: "Nebraska", hours: 50, night: 10, note: "None needed with driver education." },
+      NV: { name: "Nevada", hours: 50, night: 10, note: "None needed with a defensive driving course." },
+      NH: { name: "New Hampshire", hours: 40, night: 10 },
+      NJ: { name: "New Jersey", hours: 50, night: 10 },
+      NM: { name: "New Mexico", hours: 50, night: 10 },
+      NY: { name: "New York", hours: 50, night: 15 },
+      NC: { name: "North Carolina", hours: 60, night: 10 },
+      ND: { name: "North Dakota", hours: 50, night: 0, note: "For drivers under 16." },
+      OH: { name: "Ohio", hours: 50, night: 10 },
+      OK: { name: "Oklahoma", hours: 50, night: 10 },
+      OR: { name: "Oregon", hours: 100, night: 0, note: "50 hours with driver education." },
+      PA: { name: "Pennsylvania", hours: 65, night: 10 },
+      RI: { name: "Rhode Island", hours: 50, night: 10 },
+      SC: { name: "South Carolina", hours: 40, night: 10 },
+      SD: { name: "South Dakota", hours: 50, night: 10 },
+      TN: { name: "Tennessee", hours: 50, night: 10 },
+      TX: { name: "Texas", hours: 30, night: 10 },
+      UT: { name: "Utah", hours: 40, night: 10 },
+      VT: { name: "Vermont", hours: 40, night: 10 },
+      VA: { name: "Virginia", hours: 45, night: 15 },
+      WA: { name: "Washington", hours: 50, night: 10 },
+      WV: { name: "West Virginia", hours: 50, night: 10, note: "None needed with driver education." },
+      WI: { name: "Wisconsin", hours: 50, night: 10 },
+      WY: { name: "Wyoming", hours: 50, night: 10 },
+   },
+
+   // The goal for a state (states without a minimum get the usual 50/10)
+   goalFor(code) {
+      const state = PracticeLog.STATES[code];
+      if (!state) return null;
+      return { hours: state.hours || 50, nightHours: state.hours ? state.night : 10, state: code };
+   },
+
    // fields: date (YYYY-MM-DD), minutes, night, conditions [], notes, supervisor
    entry({ date, minutes, night = false, conditions = [], notes = "", supervisor = "" }) {
       const m = Math.round(Number(minutes));

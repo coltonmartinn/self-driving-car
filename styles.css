@@ -2272,6 +2272,22 @@ button.badge {
    gap: 12px;
 }
 
+.state-row {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: 8px 14px;
+   margin: 4px 0 14px;
+   font-size: 14px;
+}
+
+.state-row label {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   font-weight: 600;
+}
+
 .small-btn {
    min-height: 28px;
    padding: 2px 10px;

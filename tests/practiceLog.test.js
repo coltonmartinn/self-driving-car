@@ -48,3 +48,15 @@ test("CSV export is sorted by date and quotes tricky text", () => {
    assert.equal(lines[1], "2026-10-01,20,yes,Highway; Rain,,");
    assert.equal(lines[2], '2026-10-05,30,no,,,"said ""great"", then left"');
 });
+
+test("every state and DC has its supervised hours, and picking one sets the goal", () => {
+   assert.equal(Object.keys(PracticeLog.STATES).length, 51);
+   for (const s of Object.values(PracticeLog.STATES)) {
+      assert.ok(s.hours >= 0 && s.night >= 0 && s.night <= s.hours && s.name);
+   }
+   const ca = PracticeLog.goalFor("CA");
+   assert.equal(ca.hours + "/" + ca.nightHours, "50/10");
+   const ms = PracticeLog.goalFor("MS"); // no state minimum: the usual advice
+   assert.equal(ms.hours + "/" + ms.nightHours, "50/10");
+   assert.equal(PracticeLog.goalFor("XX"), null);
+});
