@@ -71,6 +71,10 @@ const Progress = {
       const rows = students.map((s) => {
          const r = Progress.summarize(s.history, lessons, rules);
          const last = s.history.length > 0 ? Math.max(...s.history.map((d) => d.date)) : null;
+         // improvement: average score of the first and the latest 3 finished drives
+         const finished = [...s.history].filter((d) => d.ended == "arrived").sort((a, b) => a.date - b.date);
+         const avg = (ds) => (ds.length ? Math.round(ds.reduce((t, d) => t + d.score, 0) / ds.length) : null);
+         const roadTests = finished.filter((d) => d.lesson == "roadtest");
          return {
             name: s.name || "Unnamed student",
             lessonsPassed: r.lessonsPassed,
@@ -81,6 +85,9 @@ const Progress = {
             minutes: r.minutes,
             lastActive: last,
             focus: r.focus[0] || null,
+            firstScore: avg(finished.slice(0, 3)),
+            latestScore: finished.length > 3 ? avg(finished.slice(-3)) : null,
+            roadTestBest: roadTests.length ? Math.max(...roadTests.map((d) => d.score)) : null,
          };
       });
       rows.sort((a, b) => a.name.localeCompare(b.name));
@@ -98,6 +105,22 @@ const Progress = {
          .sort((a, b) => b.students - a.students)
          .slice(0, 5);
       return { rows, focus };
+   },
+
+   // The class as a spreadsheet (CSV), e.g. to compare before and after in a pilot
+   classCsv(rows) {
+      const cell = (v) => {
+         const s = v == null ? "" : String(v);
+         return /[",\n]/.test(s) ? "\"" + s.replace(/"/g, "\"\"") + "\"" : s;
+      };
+      const header = ["Student", "Lessons passed", "Road test passed", "Road test best", "Permit quiz best %", "Drives",
+         "Practice minutes", "Avg score, first 3 drives", "Avg score, latest 3 drives", "Most common mistake", "Last active"];
+      const lines = rows.map((r) => [
+         r.name, r.lessonsPassed + "/" + r.lessonCount, r.roadTestPassed ? "yes" : "no", r.roadTestBest, r.quizBest, r.drives,
+         r.minutes, r.firstScore, r.latestScore, r.focus ? r.focus.title : "",
+         r.lastActive ? new Date(r.lastActive).toISOString().slice(0, 10) : "",
+      ]);
+      return [header, ...lines].map((l) => l.map(cell).join(",")).join("\n") + "\n";
    },
 
    // Pulls the report data out of a pasted share link (or the bare code)

@@ -80,3 +80,17 @@ test("a class view combines several students' links", () => {
    assert.equal(speeding.students, 2, "both students speed");
    assert.equal(c.focus[0].rule, "speeding");
 });
+
+test("the class spreadsheet shows each student's first and latest scores, for measuring progress", () => {
+   const drive = (score, date, lesson = "stops") => ({ lesson, city: "x", date, ended: "arrived", score, grade: "B", passed: score >= 80, minutes: 2, mistakes: [] });
+   const history = [drive(60, 1), drive(70, 2), drive(80, 3), drive(85, 4), drive(90, 5), drive(95, 6, "roadtest")];
+   const c = Progress.classSummary([{ name: "Ana, R.", history, quiz: { best: 85 } }], LESSONS, DrivingCoach.RULES);
+   assert.equal(c.rows[0].firstScore, 70);
+   assert.equal(c.rows[0].latestScore, 90);
+   assert.equal(c.rows[0].roadTestBest, 95);
+   const csv = Progress.classCsv(c.rows).trim().split("\n");
+   assert.equal(csv.length, 2);
+   assert.ok(csv[0].startsWith("Student,Lessons passed"));
+   assert.ok(csv[1].startsWith("\"Ana, R.\","), "names with commas are quoted: " + csv[1]);
+   assert.ok(csv[1].includes(",70,90,"));
+});

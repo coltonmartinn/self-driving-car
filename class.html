@@ -58,7 +58,10 @@
                <h2 id="classTitle"></h2>
                <p class="muted" id="classDate"></p>
             </div>
-            <button class="no-print" onclick="window.print()">🖨️ Print</button>
+            <div class="chips no-print">
+               <button onclick="downloadCsv()">⬇️ Download CSV</button>
+               <button onclick="window.print()">🖨️ Print</button>
+            </div>
          </div>
          <div class="stat-row" id="classStats"></div>
          <p class="report-section">Teach this next: the most common mistakes</p>
@@ -78,6 +81,7 @@
    <script src="js/school/lessons.js"></script>
    <script src="js/school/progress.js"></script>
    <script>
+      let current = null; // the class shown, for the CSV download
       try {
          links.value = localStorage.getItem("class-links") || "";
       } catch (e) {}
@@ -108,7 +112,16 @@
          render(Progress.classSummary(students, LESSONS, DrivingCoach.RULES));
       }
 
+      function downloadCsv() {
+         if (!current) return;
+         const a = document.createElement("a");
+         a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(Progress.classCsv(current.rows));
+         a.download = "driving-school-class.csv";
+         a.click();
+      }
+
       function render(c) {
+         current = c;
          const n = c.rows.length;
          classTitle.textContent = n + " student" + (n == 1 ? "" : "s");
          classDate.textContent = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
@@ -119,6 +132,7 @@
             [c.rows.filter((r) => r.roadTestPassed).length + "/" + n, "passed road test"],
             [quizzes.length ? avg(quizzes) + "%" : "–", "permit quiz (avg best)"],
             [c.rows.reduce((t, r) => t + r.minutes, 0) + " min", "total practice"],
+            improvement(c.rows),
          ].map(([v, label]) => "<div class='stat'><b>" + v + "</b><span>" + label + "</span></div>").join("");
 
          classFocus.innerHTML = c.focus.length == 0
@@ -141,6 +155,14 @@
          classReport.hidden = false;
       }
 
+      // How much scores went up, from each student's first drives to their latest
+      function improvement(rows) {
+         const both = rows.filter((r) => r.firstScore != null && r.latestScore != null);
+         if (both.length == 0) return ["–", "score change, first → latest drives"];
+         const change = Math.round(both.reduce((t, r) => t + r.latestScore - r.firstScore, 0) / both.length);
+         return [(change >= 0 ? "+" : "") + change, "avg score change, first → latest drives"];
+      }
+
       function clearAll() {
          links.value = "";
          loadStatus.textContent = "";
@@ -158,12 +180,17 @@
             lesson, city: "Beverly Hills", date: now - daysAgo * day, ended: "arrived", score,
             grade: score >= 90 ? "A" : "B", passed, minutes: 2, mistakes,
          });
+         // made-up students who start shaky and get better, like real learners
          const examples = [
-            ["Jordan (example)", [drive("basics", 100, true, [], 6), drive("stops", 87, true, ["rolling_stop"], 5),
-               drive("lights", 100, true, [], 4), drive("signals", 91, true, ["no_signal", "speeding"], 2)], { best: 85, passedFull: true }],
-            ["Priya (example)", [drive("basics", 97, true, ["speeding"], 3), drive("stops", 70, false, ["rolling_stop", "rolling_stop", "speeding"], 2),
+            ["Jordan (example)", [drive("basics", 79, false, ["wrong_side", "speeding", "curb"], 9),
+               drive("basics", 94, true, ["speeding"], 8), drive("stops", 70, false, ["rolling_stop", "rolling_stop", "speeding"], 6),
+               drive("stops", 87, true, ["rolling_stop"], 5), drive("lights", 100, true, [], 4),
+               drive("signals", 91, true, ["no_signal", "speeding"], 2)], { best: 85, passedFull: true }],
+            ["Priya (example)", [drive("basics", 73, false, ["speeding", "speeding", "wrong_side"], 6),
+               drive("basics", 88, true, ["speeding"], 5), drive("stops", 60, false, ["rolling_stop", "ran_stop", "speeding"], 3),
                drive("stops", 94, true, ["speeding"], 1)], { best: 75, passedFull: false }],
-            ["Marcus (example)", [drive("basics", 100, true, [], 9), drive("stops", 100, true, [], 8), drive("lights", 97, true, ["speeding"], 8),
+            ["Marcus (example)", [drive("basics", 82, true, ["speeding", "tailgating"], 12), drive("stops", 76, false, ["rolling_stop", "speeding"], 11),
+               drive("stops", 100, true, [], 10), drive("lights", 97, true, ["speeding"], 8),
                drive("signals", 100, true, [], 7), drive("following", 94, true, ["tailgating"], 6), drive("pedestrians", 100, true, [], 5),
                drive("roadtest", 91, true, ["no_signal", "speeding"], 3)], { best: 95, passedFull: true }],
          ];
