@@ -65,6 +65,7 @@ class TrafficCar extends Car {
 
       this.servedStops = new Set();
       this.stopWait = 0;
+      this.yieldWait = 0; // frames waiting to get into a roundabout
       this.blockedFrames = 0;
       this.ghostFrames = 0;
       this.playerWait = 0; // frames spent waiting on a stopped human driver
@@ -95,6 +96,9 @@ class TrafficCar extends Car {
       }
       // don't make a U-turn unless it's a dead end
       const forward = options.filter((e) => e.to != this.edge.from);
+      if (forward.length == 0 && this.network.world.mapEdges && this.network.world.mapEdges.has(this.edge.to)) {
+         return null; // the road runs on off the map: drive off it (and get recycled)
+      }
       const pool = forward.length > 0 ? forward : options;
       if (pool.length == 0) {
          return null;
@@ -118,6 +122,7 @@ class TrafficCar extends Car {
          }
          this.edge = next;
          this.nextEdge = null;
+         this.yieldWait = 0;
          lane = this.network.lane(this.edge);
          laneSeg = new Segment(lane.a, lane.b);
          len = laneSeg.length();
@@ -184,6 +189,9 @@ class TrafficCar extends Car {
       let targetSpeed = this.cruiseSpeed;
       if (turning > 0.5 || Math.abs(diff) > 0.4) {
          targetSpeed = Math.min(targetSpeed, 1.6); // slow down for corners
+      }
+      if (Roundabouts.at(this.network.world, pos, rw)) {
+         targetSpeed = Math.min(targetSpeed, 1.3); // about 17 mph round a roundabout
       }
 
       const heading = this.heading();
@@ -257,8 +265,18 @@ class TrafficCar extends Car {
                   }
                }
             }
-         } else if (m instanceof Yield && gap < 60) {
-            targetSpeed = Math.min(targetSpeed, 1.2);
+         } else if (m instanceof Yield) {
+            // at a roundabout, wait for a gap in the cars coming round
+            // (but not forever: someone may be stopped in the ring)
+            const rb = Roundabouts.at(this.network.world, m.center, 200);
+            const coming = rb && gap < 120 && this.yieldWait < 300 &&
+               Roundabouts.trafficComing(rb, m.center, otherTraffic, { exclude: this, roadWidth: rw });
+            if (coming) {
+               targetSpeed = Math.min(targetSpeed, gap < 3 ? 0 : stoppingSpeed(gap));
+               if (this.speed < 0.1) this.yieldWait++;
+            } else if (gap < 60) {
+               targetSpeed = Math.min(targetSpeed, 1.2);
+            }
          }
       }
 

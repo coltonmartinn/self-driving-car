@@ -24,6 +24,7 @@
    <script src="js/i18n/es-lessons.js"></script>
    <script src="js/i18n/es-pages.js"></script>
    <script src="js/i18n/es-quiz.js"></script>
+   <script src="js/i18n/es-states.js"></script>
 </head>
 <body class="quiz-page">
    <header class="topbar">
@@ -47,16 +48,41 @@
             Questions like the ones on the written permit test: road signs, traffic signals,
             right-of-way, lane markings and safe driving. Every answer comes with an explanation.
          </p>
+         <div class="state-row">
+            <label>Your state
+               <select id="stateSelect"><option value="">Choose…</option></select>
+            </label>
+            <span class="muted" id="stateNote"></span>
+         </div>
          <div class="stat-row" id="quizStats"></div>
          <div class="quiz-modes">
             <button class="primary big" onclick="start(20)">Practice test · 20 questions</button>
-            <button class="big" id="allBtn" onclick="start(QUIZ_BANK.length)"></button>
+            <button class="big" id="allBtn" onclick="start(999)"></button>
          </div>
          <p class="report-section">Or practice one topic</p>
          <div class="chips" id="topicChips"></div>
          <p class="cert-note">
             Rules vary a little from state to state. Always study your own state's driver's manual too.
          </p>
+      </section>
+
+      <!-- which state? (asked once, before the first test) -->
+      <section id="stateScreen" class="card quiz-card" hidden>
+         <span class="eyebrow">📍 Your state</span>
+         <h1>Which state do you live in?</h1>
+         <p class="muted">
+            Permit tests also ask about your own state's laws, like the youngest age for a permit and the
+            limits on new drivers. You'll only get questions about the state you pick.
+         </p>
+         <div class="state-row">
+            <label>State
+               <select id="stateAsk"><option value="">Choose…</option></select>
+            </label>
+         </div>
+         <div class="card-actions">
+            <button class="ghost" onclick="skipState()">General questions only</button>
+            <button class="primary" id="stateGo" onclick="chooseState()" disabled>Start →</button>
+         </div>
       </section>
 
       <!-- question -->
@@ -98,26 +124,95 @@
    </main>
 
    <script src="js/school/quiz.js"></script>
+   <script src="js/school/practiceLog.js"></script>
+   <script src="js/school/stateQuiz.js"></script>
    <script>
       let questions = [];
       let answers = [];
       let index = 0;
       let lastCount = 20;
       let lastTopic = null;
+      let pendingStart = null; // the test to start once the state is picked
 
-      allBtn.textContent = tr("All {count} questions", { count: QUIZ_BANK.length });
-      const topics = [...new Set(QUIZ_BANK.map((q) => q.topic))];
-      for (const topic of topics) {
-         const chip = document.createElement("button");
-         chip.className = "chip";
-         chip.textContent = tr(topic) + " (" + QUIZ_BANK.filter((q) => q.topic == topic).length + ")";
-         chip.addEventListener("click", () => start(99, topic));
-         topicChips.append(chip);
+      // ---------- the student's state (questions are only ever about it) ----------
+
+      let homeState = savedState(); // a state code, "none" (general questions only), or null (not asked yet)
+      const states = Object.entries(PracticeLog.STATES).sort((a, b) => tr(a[1].name).localeCompare(tr(b[1].name)));
+      for (const select of [stateSelect, stateAsk]) {
+         for (const [code, state] of states) {
+            const option = document.createElement("option");
+            option.value = code;
+            option.textContent = tr(state.name);
+            select.append(option);
+         }
       }
+
+      function savedState() {
+         try {
+            const code = localStorage.getItem("home-state");
+            if (code) return code;
+            const goal = JSON.parse(localStorage.getItem("practice-goal")); // picked in the practice log
+            return goal && goal.state ? goal.state : null;
+         } catch (e) {
+            return null;
+         }
+      }
+
+      function setState(code) {
+         homeState = code;
+         try {
+            localStorage.setItem("home-state", code);
+         } catch (e) {}
+         renderTopics();
+      }
+
+      const stateQuestions = () => (homeState && homeState != "none" ? StateQuiz.questionsFor(homeState) : []);
+      const allQuestions = () => [...QUIZ_BANK, ...stateQuestions()];
+      const stateName = () => tr(PracticeLog.STATES[homeState].name);
+      const topicName = (topic) => (topic == StateQuiz.TOPIC ? tr("{state} laws", { state: stateName() }) : tr(topic));
+
+      stateSelect.addEventListener("change", () => setState(stateSelect.value || "none"));
+      stateAsk.addEventListener("change", () => (stateGo.disabled = !stateAsk.value));
+
+      function chooseState() {
+         if (!stateAsk.value) return;
+         setState(stateAsk.value);
+         start(...pendingStart);
+      }
+
+      function skipState() {
+         setState("none");
+         start(...pendingStart);
+      }
+
+      function renderTopics() {
+         const own = stateQuestions();
+         stateSelect.value = own.length ? homeState : "";
+         stateNote.textContent = own.length
+            ? tr("Includes {count} questions on {state} law, from the IIHS licensing table (October 2026).", { count: own.length, state: stateName() })
+            : tr("Pick your state to add questions about its laws.");
+         allBtn.textContent = tr("All {count} questions", { count: allQuestions().length });
+         topicChips.innerHTML = "";
+         const topics = [...new Set(allQuestions().map((q) => q.topic))];
+         for (const topic of topics) {
+            const chip = document.createElement("button");
+            chip.className = "chip";
+            chip.textContent = topicName(topic) + " (" + allQuestions().filter((q) => q.topic == topic).length + ")";
+            chip.addEventListener("click", () => start(99, topic));
+            topicChips.append(chip);
+         }
+      }
+
+      // The explanation, in the page's language
+      function explanation(q) {
+         return q.whyParts ? q.whyParts.map(([text, vars]) => tr(text, vars)).join(" ") : tr(q.why);
+      }
+
+      renderTopics();
       showStart();
 
       function screen(el) {
-         for (const s of [startScreen, questionScreen, resultScreen]) {
+         for (const s of [startScreen, stateScreen, questionScreen, resultScreen]) {
             s.hidden = s != el;
          }
          window.scrollTo(0, 0);
@@ -134,10 +229,25 @@
       }
 
       function start(count, topic = null, bank = null) {
+         if (!homeState) {
+            // ask first, so state questions are only ever about their own state
+            pendingStart = [count, topic, bank];
+            stateAsk.value = "";
+            stateGo.disabled = true;
+            screen(stateScreen);
+            return;
+         }
          lastCount = count;
          lastTopic = topic;
-         const pool = bank || (topic ? QUIZ_BANK.filter((q) => q.topic == topic) : QUIZ_BANK);
-         questions = Quiz.create(pool, Math.min(count, pool.length));
+         const own = stateQuestions();
+         if (bank || topic) {
+            const pool = bank || allQuestions().filter((q) => q.topic == topic);
+            questions = Quiz.create(pool, Math.min(count, pool.length));
+         } else {
+            // a practice test: a few questions on their state's laws, the rest general
+            const total = Math.min(count, allQuestions().length);
+            questions = StateQuiz.mix(QUIZ_BANK, own, total, total >= allQuestions().length ? own.length : 3);
+         }
          answers = [];
          index = 0;
          screen(questionScreen);
@@ -147,11 +257,11 @@
       function showQuestion() {
          const q = questions[index];
          qCounter.textContent = tr("Question {n} of {count}", { n: index + 1, count: questions.length });
-         qTopic.textContent = tr(q.topic);
+         qTopic.textContent = topicName(q.topic);
          qBar.style.width = (index / questions.length) * 100 + "%";
          qSign.innerHTML = q.sign ? SIGNS[q.sign] : "";
          qSign.hidden = !q.sign;
-         qText.textContent = tr(q.q);
+         qText.textContent = tr(q.q, q.vars);
          qAnswers.innerHTML = "";
          q.options.forEach((text, i) => {
             const b = document.createElement("button");
@@ -179,7 +289,7 @@
          const right = i == q.answer;
          qExplain.className = "explain " + (right ? "good" : "bad");
          qExplain.innerHTML = "<b>" + (right ? "✅ " + tr("Correct!") : "❌ " + tr("Not quite.")) + "</b> <span></span>";
-         qExplain.lastChild.textContent = tr(q.why);
+         qExplain.lastChild.textContent = explanation(q);
          qExplain.hidden = false;
          nextBtn.textContent = index == questions.length - 1 ? tr("See results") : tr("Next →");
          nextBtn.hidden = false;
@@ -206,12 +316,12 @@
          const missed = questions.filter((q, i) => answers[i] != q.answer);
          rTopics.innerHTML = Object.keys(r.missedTopics).length == 0 ? "" :
             "<p class='report-section'>" + tr("Topics to review") + "</p><div class='chips'>" +
-            Object.entries(r.missedTopics).map(([t, n]) => "<span class='badge bad'>" + tr(t) + " ×" + n + "</span>").join("") + "</div>";
+            Object.entries(r.missedTopics).map(([t, n]) => "<span class='badge bad'>" + escapeHtml(topicName(t)) + " ×" + n + "</span>").join("") + "</div>";
          rMissed.innerHTML = missed.length == 0
             ? "<p class='report-section'>" + tr("Mistakes") + "</p><ul class='report-list'><li>🌟 " + tr("Perfect score!") + "</li></ul>"
             : "<p class='report-section'>" + tr("Review") + "</p><ul class='report-list'>" + missed.map((q) =>
-               "<li><span>❌</span><div><b>" + escapeHtml(tr(q.q)) + "</b><span class='tip'>" + tr("Answer:") + " " + escapeHtml(tr(q.options[q.answer])) +
-               ". " + escapeHtml(tr(q.why)) + "</span></div></li>").join("") + "</ul>";
+               "<li><span>❌</span><div><b>" + escapeHtml(tr(q.q, q.vars)) + "</b><span class='tip'>" + tr("Answer:") + " " + escapeHtml(tr(q.options[q.answer])) +
+               ". " + escapeHtml(explanation(q)) + "</span></div></li>").join("") + "</ul>";
          retryMissedBtn.hidden = missed.length == 0;
          saveResult(r, questions.length >= 20 && !lastTopic);
          screen(resultScreen);
@@ -219,7 +329,7 @@
 
       function retryMissed() {
          const ids = new Set(questions.filter((q, i) => answers[i] != q.answer).map((q) => q.id));
-         start(ids.size, lastTopic, QUIZ_BANK.filter((q) => ids.has(q.id)));
+         start(ids.size, lastTopic, allQuestions().filter((q) => ids.has(q.id)));
       }
 
       document.addEventListener("keydown", (evt) => {

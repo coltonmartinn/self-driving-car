@@ -1,6 +1,6 @@
 class World {
    // asphalt, a yellow center line on two-way roads, white edge lines
-   static STYLE = { road: "#575d66", centerLine: "#f2c230", edgeLine: "#f4f4f2" };
+   static STYLE = { road: "#575d66", centerLine: "#f2c230", edgeLine: "#f4f4f2", island: "#6fa055", curb: "#d9d6cc" };
 
    constructor(
       graph,
@@ -23,12 +23,14 @@ class World {
       // "osm": real building footprints imported from OpenStreetMap
       this.source = "generated";
       this.place = null; // { name, lat, lon, radius } for real places
+      this.roundabouts = []; // [{ center, radius, ring, approaches }] (see Roundabouts)
 
       this.envelopes = [];
       this.roadBorders = [];
       this.buildings = [];
       this.trees = [];
       this.laneGuides = null; // computed on demand, see getLaneGuides()
+      this.mapEdges = new Set(); // road ends where the map was cut off (see #findMapEdges)
 
       this.markings = [];
 
@@ -62,6 +64,7 @@ class World {
          "treeSize",
          "source",
          "place",
+         "roundabouts",
       ]) {
          if (info[key] !== undefined) {
             world[key] = info[key];
@@ -79,6 +82,7 @@ class World {
             (s) => new Segment(loadPoint(s.p1), loadPoint(s.p2), s.oneWay)
          );
          world.culDeSacs = (info.culDeSacs || []).map(loadPoint);
+         world.#findMapEdges();
          world.laneGuides = null;
          world.lightGroups = null;
          world.#computeIntersections();
@@ -103,6 +107,7 @@ class World {
       return {
          source: this.source,
          place: this.place,
+         roundabouts: this.roundabouts,
          graph: this.graph,
          roadWidth: this.roadWidth,
          roadRoundness: this.roadRoundness,
@@ -138,6 +143,7 @@ class World {
       this.envelopes = this.graph.segments.map(
          (seg) => new Envelope(seg, this.roadWidth, this.roadRoundness)
       );
+      this.#findMapEdges();
       this.culDeSacs = this.#findCulDeSacs();
       for (const center of this.culDeSacs) {
          this.envelopes.push(Envelope.circle(center, this.getCulDeSacRadius()));
@@ -152,8 +158,39 @@ class World {
       return this.roadWidth * 1.25;
    }
 
+   // Real places are downloaded as a circle, so roads crossing its edge are
+   // cut off there. Those ends aren't dead ends: the road runs on off the map.
+   #findMapEdges() {
+      this.mapEdges = new Set();
+      const place = this.place;
+      if (this.source != "osm" || !place || !place.radius) {
+         return;
+      }
+      const edge = (place.loadRadius || place.radius) * Osm.UNITS_PER_METER - 1;
+      const degree = new Map();
+      for (const seg of this.graph.segments) {
+         degree.set(seg.p1, (degree.get(seg.p1) || 0) + 1);
+         degree.set(seg.p2, (degree.get(seg.p2) || 0) + 1);
+      }
+      for (const p of this.graph.points) {
+         // (a road piece is only kept if one end is inside the circle)
+         if (degree.get(p) == 1 && Math.hypot(p.x, p.y) > edge) {
+            this.mapEdges.add(p);
+         }
+      }
+   }
+
+   // How far from the middle drives should stay (the area that was picked,
+   // inside the extra margin downloaded around it), or Infinity
+   getAreaRadius() {
+      return this.source == "osm" && this.place && this.place.radius
+         ? this.place.radius * Osm.UNITS_PER_METER
+         : Infinity;
+   }
+
    // Dead ends get a round turnaround bulb, unless they're a tiny stub right
-   // next to an intersection (the bulb would just swallow the junction)
+   // next to an intersection (the bulb would just swallow the junction), or
+   // where the map was cut off
    #findCulDeSacs() {
       const degree = new Map();
       for (const seg of this.graph.segments) {
@@ -165,6 +202,7 @@ class World {
       return this.graph.points.filter(
          (p) =>
             degree.get(p) == 1 &&
+            !this.mapEdges.has(p) &&
             !getNearestPoint(p, junctions, minDistance)
       );
    }
@@ -450,6 +488,17 @@ class World {
          if (inView(env.poly.getBounds())) {
             env.draw(ctx, { fill: World.STYLE.road, stroke: World.STYLE.road, lineWidth: 15 });
          }
+      }
+      // a grassy island with a curb in the middle of each roundabout
+      for (const rb of this.roundabouts) {
+         if (distance(rb.center, viewPoint) > renderRadius + rb.radius) continue;
+         ctx.beginPath();
+         ctx.arc(rb.center.x, rb.center.y, rb.radius - this.roadWidth / 2 - 8, 0, Math.PI * 2);
+         ctx.fillStyle = World.STYLE.island;
+         ctx.fill();
+         ctx.lineWidth = 8;
+         ctx.strokeStyle = World.STYLE.curb;
+         ctx.stroke();
       }
       for (const marking of this.markings) {
          if (

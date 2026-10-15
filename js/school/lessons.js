@@ -4,7 +4,8 @@
 // optional: pedestrians, hazards (surprise events), conditions ({ night, rain }),
 // followSeconds (minimum following distance, default 2), schoolZone,
 // blockers (delivery trucks to pass), emergency (an ambulance comes),
-// phone (texts arrive while driving)
+// phone (texts arrive while driving), roundabouts (drive in a copy of the city
+// with some roundabouts)
 const LESSONS = [
    {
       id: "basics",
@@ -162,6 +163,24 @@ const LESSONS = [
       speedLimit: 25,
       blockers: 2,
       rules: ["crash", "curb", "pass_no_signal", "no_blind_spot_check", "pass_return_signal", "unsafe_pass", "clean_pass", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
+      id: "roundabouts",
+      emoji: "🔄",
+      title: "Roundabouts",
+      summary: "Yield on the way in, go counterclockwise, signal on the way out.",
+      learn: [
+         "Slow down to about 15 mph as you come up to the roundabout's YIELD line.",
+         "Look left: cars already in the roundabout go first. Wait for a gap, then turn right to go in.",
+         "Go counterclockwise, keeping the island on your left. The blue line shows your exit.",
+         "Signal right (E) as you pass the exit before yours, so waiting drivers know you're leaving.",
+      ],
+      route: "roundabout",
+      traffic: 16,
+      speedLimit: 25,
+      roundabouts: true,
+      rules: ["crash", "curb", "roundabout_no_yield", "fast_yield", "roundabout_wrong_way", "roundabout_exit_signal", "roundabout_good",
+         "no_signal", "wrong_signal", "signaled", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
    },
    {
       id: "emergency",

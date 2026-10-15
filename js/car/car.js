@@ -84,6 +84,9 @@ class Car {
          }
       }
       for (const other of traffic) {
+         // someone on foot brushing past a car that isn't moving isn't a crash
+         // (driving into them is)
+         if (other.isPedestrian && Math.abs(this.speed) < 0.05) continue;
          if (polysIntersect(this.polygon, other.polygon)) {
             return true;
          }

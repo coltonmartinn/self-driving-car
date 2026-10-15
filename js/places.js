@@ -33,6 +33,9 @@ const Places = {
       medium: 500,
       large: 800,
    },
+   // roads are downloaded this far past the picked area (meters), so streets
+   // run on past its edge instead of stopping at it
+   MARGIN: 150,
 
    async search(query) {
       if (await Places.hasServer()) {
@@ -163,7 +166,7 @@ const Places = {
       const parsed = Osm.parse(data, {
          lat0: place.lat,
          lon0: place.lon,
-         radius: place.radius,
+         radius: place.loadRadius || place.radius,
       });
       if (parsed.segments.length == 0) {
          throw new Error("No drivable roads found there. Try a different place or a bigger area.");
@@ -184,7 +187,8 @@ const Places = {
 
    async loadPlace(place, onStatus = (message) => {}) {
       onStatus("Downloading roads and buildings around " + Places.shortName(place.name) + "…");
-      const data = await Places.fetchMapData(place.lat, place.lon, place.radius, onStatus);
+      place = { ...place, loadRadius: place.radius + Places.MARGIN };
+      const data = await Places.fetchMapData(place.lat, place.lon, place.loadRadius, onStatus);
       onStatus("Building the city…");
       return Places.buildWorldInBackground(data, place);
    },

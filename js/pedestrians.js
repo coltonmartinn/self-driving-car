@@ -55,9 +55,15 @@ class Pedestrian {
             { x: ahead.x - r, y: ahead.y - r }, { x: ahead.x + r, y: ahead.y - r },
             { x: ahead.x + r, y: ahead.y + r }, { x: ahead.x - r, y: ahead.y + r },
          ];
+         // At the far curb that look-ahead can't go any further, so check
+         // where their next step would put them (a car stopped across the
+         // corner can be right there)
+         const atCurb = this.t + 22 / length >= 1;
+         const next = subtract(lerp2D(a, b, Math.min(1, this.t + this.speed / length)), this);
+         const body = this.polygon.map((p) => ({ x: p.x + next.x, y: p.y + next.y }));
          this.blockedBy = cars.find((c) =>
             c.polygon && Math.abs(c.x - ahead.x) < 80 && Math.abs(c.y - ahead.y) < 80 &&
-            polysIntersect(step, c.polygon)
+            (polysIntersect(step, c.polygon) || (atCurb && polysIntersect(body, c.polygon)))
          ) || null;
          if (!this.blockedBy) {
             this.t = Math.min(1, this.t + this.speed / length);

@@ -65,6 +65,18 @@ class DrivingCoach {
          severity: "minor", title: "Didn't slow down to yield",
          tip: "At a yield sign, slow down and be ready to stop for traffic that has the right of way.",
       },
+      roundabout_no_yield: {
+         severity: "major", title: "Didn't yield entering the roundabout",
+         tip: "Cars already in the roundabout go first. Slow down, look left, and wait for a gap before you go in.",
+      },
+      roundabout_wrong_way: {
+         severity: "critical", title: "Went the wrong way around the roundabout",
+         tip: "Turn right to enter and go counterclockwise, keeping the island on your left. Even to turn left, go all the way around.",
+      },
+      roundabout_exit_signal: {
+         severity: "minor", title: "Didn't signal your exit",
+         tip: "Signal right as you pass the exit before yours, so drivers waiting to enter know you're leaving.",
+      },
       hit_by_traffic: {
          severity: "info", title: "Another car hit you",
          tip: "Not your fault this time. Out on the road, keep scanning your mirrors and leave yourself an escape route.",
@@ -129,6 +141,7 @@ class DrivingCoach {
       ignored_phone: { severity: "good", title: "Left your phone alone" },
       yielded_emergency: { severity: "good", title: "Pulled over for the ambulance" },
       clean_pass: { severity: "good", title: "Passed safely" },
+      roundabout_good: { severity: "good", title: "Handled the roundabout well" },
       checked_blind_spot: { severity: "good", title: "Checked your blind spot" },
       waited_green: { severity: "good", title: "Waited for the green light" },
       signaled: { severity: "good", title: "Signaled the turn" },
@@ -200,6 +213,8 @@ class DrivingCoach {
       this.lastLook = { left: -Infinity, right: -Infinity }; // frames of the last shoulder checks
       this.seenLooks = car.controls.lookCount || 0;
       this.pass = null; // a pass in progress (around a parked vehicle)
+      this.roundabouts = world.roundabouts || [];
+      this.inRoundabout = null; // { rb, since, wrongWay } while going round one
       this.emergencies = new Map(); // emergency vehicle -> what we did as it came
       this.judgedEmergencies = new Set(); // (each one is judged once)
       this.reportedZones = new Set();
@@ -307,6 +322,7 @@ class DrivingCoach {
       this.#checkSignsAndSignals();
       this.#checkCrosswalks(traffic.filter((t) => t.isPedestrian));
       this.#checkFollowing(traffic);
+      this.#checkRoundabouts(traffic);
       this.#checkLane(traffic);
       this.#checkTurns(signal);
       return this.events.slice(before);
@@ -656,9 +672,62 @@ class DrivingCoach {
       }
    }
 
+   // The roundabout the car is at or near (within `margin` of the ring), if any
+   roundaboutNear(margin = this.world.roadWidth * 1.6) {
+      return this.roundabouts.length ? Roundabouts.at(this.world, this.car, margin) : null;
+   }
+
+   // Roundabouts: yield to cars already in the ring, go round the right way,
+   // and signal right before leaving
+   #checkRoundabouts(traffic) {
+      const car = this.car;
+      const rw = this.world.roadWidth;
+      const rb = this.inRoundabout ? this.inRoundabout.rb : this.roundaboutNear(rw);
+      if (!rb) {
+         return;
+      }
+      const d = distance(car, rb.center);
+      const inRing = d < rb.radius + rw / 2 - 5;
+      let s = this.inRoundabout;
+      if (!s && inRing && Math.abs(car.speed) > 0.05) {
+         // coming in: was anyone in the ring on their way to us?
+         s = this.inRoundabout = { rb, since: this.frame - 240, wrongWay: 0 };
+         const coming = Roundabouts.trafficComing(rb, car, traffic, { window: 0.9, exclude: car, moving: true, roadWidth: rw });
+         if (coming) {
+            this.report("roundabout_no_yield");
+         }
+      }
+      if (!s) {
+         return;
+      }
+      const flow = Roundabouts.flow(rb, car, this.heading());
+      s.wrongWay = inRing && flow < -0.4 && car.speed > 0.3 ? s.wrongWay + 1 : 0;
+      if (s.wrongWay == 30) {
+         this.report("roundabout_wrong_way");
+      }
+      if (d > rb.radius + rw / 2 + 15) {
+         // out again
+         this.inRoundabout = null;
+         const signaled = this.signaledRecently("right", 150);
+         if (!signaled) {
+            this.report("roundabout_exit_signal");
+         } else if (!this.events.some((e) => e.frame >= s.since && e.severity != "good" && e.severity != "info")) {
+            this.report("roundabout_good");
+         }
+         if (car.controls.cancelSignal) {
+            car.controls.cancelSignal();
+         }
+      }
+   }
+
    // Right side of two-way roads, and the right way on one-way roads
    #checkLane(traffic = []) {
       const car = this.car;
+      if (this.inRoundabout) {
+         this.counters.wrongSide = 0;
+         this.counters.wrongWay = 0;
+         return; // judged by #checkRoundabouts
+      }
       if (this.pass || this.blockerNear(traffic)) {
          this.counters.wrongSide = 0; // passing something blocking the lane is fine
          this.#checkPassing(traffic);
@@ -708,6 +777,10 @@ class DrivingCoach {
    // Was the matching turn signal on shortly before or during it?
    #checkTurns(signal) {
       const car = this.car;
+      if (this.inRoundabout || this.roundaboutNear()) {
+         this.turn = null; // going round a roundabout isn't a turn
+         return;
+      }
       const junction = this.nearJunction(this.world.roadWidth * 0.9);
       if (!this.turn && junction && Math.abs(car.speed) > 0.2) {
          this.turn = {

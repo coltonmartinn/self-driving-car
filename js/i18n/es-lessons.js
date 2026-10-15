@@ -164,4 +164,19 @@ I18N.add("es", {
    "{feet} without seeing the road": "{feet} sin ver el camino",
    "braked in {seconds} s": "frenaste en {seconds} s",
    "had room to spare": "con espacio de sobra",
+
+   // ---------- roundabouts ----------
+   "Roundabouts": "Glorietas",
+   "Yield on the way in, go counterclockwise, signal on the way out.": "Cede el paso al entrar, circula en sentido contrario a las manecillas del reloj y pon la direccional al salir.",
+   "Slow down to about 15 mph as you come up to the roundabout's YIELD line.": "Baja a unas 15 mph al acercarte a la línea YIELD (ceda el paso) de la glorieta.",
+   "Look left: cars already in the roundabout go first. Wait for a gap, then turn right to go in.": "Mira a la izquierda: los autos que ya están en la glorieta pasan primero. Espera un espacio y luego gira a la derecha para entrar.",
+   "Go counterclockwise, keeping the island on your left. The blue line shows your exit.": "Circula en sentido contrario a las manecillas del reloj, con la isleta a tu izquierda. La línea azul te muestra tu salida.",
+   "Signal right (E) as you pass the exit before yours, so waiting drivers know you're leaving.": "Pon la direccional derecha (E) al pasar la salida anterior a la tuya, para que los conductores que esperan sepan que vas a salir.",
+   "Didn't yield entering the roundabout": "No cediste el paso al entrar a la glorieta",
+   "Cars already in the roundabout go first. Slow down, look left, and wait for a gap before you go in.": "Los autos que ya están en la glorieta pasan primero. Baja la velocidad, mira a la izquierda y espera un espacio antes de entrar.",
+   "Went the wrong way around the roundabout": "Circulaste en sentido contrario en la glorieta",
+   "Turn right to enter and go counterclockwise, keeping the island on your left. Even to turn left, go all the way around.": "Gira a la derecha para entrar y circula en sentido contrario a las manecillas del reloj, con la isleta a tu izquierda. Aunque vayas a dar vuelta a la izquierda, rodea la glorieta.",
+   "Didn't signal your exit": "No pusiste la direccional al salir",
+   "Signal right as you pass the exit before yours, so drivers waiting to enter know you're leaving.": "Pon la direccional derecha al pasar la salida anterior a la tuya, para que quienes esperan entrar sepan que vas a salir.",
+   "Handled the roundabout well": "Manejaste bien en la glorieta",
 });

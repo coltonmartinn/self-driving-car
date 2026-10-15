@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadApp } = require("./helpers/loadApp");
 
-const { Osm, World, Graph, Light, Stop, Crossing } = loadApp();
+const { Osm, World, Graph, Light, Stop, Crossing, Places, Simulation } = loadApp({ seed: 2 });
 
 // A tiny made-up neighbourhood in Overpass JSON format: a crossroads, a
 // one-way street, a reversed one-way, a footpath and one building.
@@ -82,4 +82,32 @@ test("signals and crossings become markings in the world", () => {
    assert.equal(lights.length, 4);
    assert.equal(markings.filter((m) => m instanceof Crossing).length, 1);
    assert.equal(markings.filter((m) => m instanceof Stop).length, 0);
+});
+
+test("roads cut off at the edge of a downloaded area run off the map, without cul-de-sacs", () => {
+   // a street east-west through the middle, 1 km long, and a real dead end
+   // 150 m to the north, in a 300 m area (plus a 150 m margin)
+   const m = 1 / 111320; // degrees of longitude per meter at the equator
+   const n = (id, east, north) => ({ type: "node", id, lat: north / 110540, lon: east * m });
+   const data = {
+      elements: [
+         n(1, -500, 0), n(2, -250, 0), n(3, 0, 0), n(4, 250, 0), n(5, 500, 0), n(6, 0, 150),
+         { type: "way", id: 10, nodes: [1, 2, 3, 4, 5], tags: { highway: "residential" } },
+         { type: "way", id: 11, nodes: [3, 6], tags: { highway: "residential" } },
+      ],
+   };
+   const world = Places.buildWorld(data, { name: "Test", lat: 0, lon: 0, radius: 300, loadRadius: 450 });
+   assert.equal(world.mapEdges.size, 2, "both ends of the long street");
+   assert.equal(world.culDeSacs.length, 1, "only the real dead end gets a turnaround");
+   assert.ok(Math.abs(world.culDeSacs[0].y + 1500) < 1);
+   // saved and loaded, it still knows
+   const again = World.load(JSON.parse(JSON.stringify(world.toJSON())));
+   assert.equal(again.mapEdges.size, 2);
+   assert.equal(again.culDeSacs.length, 1);
+   // trips stay inside the picked area
+   const sim = new Simulation(world, { trafficOn: false });
+   for (let i = 0; i < 20; i++) {
+      const dest = sim.randomDestination();
+      assert.ok(Math.hypot(dest.x, dest.y) < 3000, "inside the area");
+   }
 });

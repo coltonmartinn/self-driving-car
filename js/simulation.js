@@ -310,14 +310,16 @@ class Simulation {
       this.start = this.home;
    }
 
-   // A reachable destination 150-450 m from the start (if the map allows)
+   // A reachable destination 150-450 m from the start (if the map allows),
+   // inside the area that was picked (not out in the margin around it)
    randomDestination() {
       const points = this.world.graph.points;
       const origin = getNearestPoint(this.home.point, points);
       if (!origin) return null;
+      const area = this.world.getAreaRadius() * 0.9;
       const candidates = points.filter((p) => {
          const d = distance(p, origin);
-         return d > 1500 && d < 4500;
+         return d > 1500 && d < 4500 && Math.hypot(p.x, p.y) < area;
       });
       const pool = candidates.length > 0 ? candidates : points;
       for (let tries = 0; tries < 25; tries++) {

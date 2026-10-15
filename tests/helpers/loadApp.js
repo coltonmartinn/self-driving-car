@@ -28,6 +28,7 @@ const FILES = [
    "js/markings/start.js",
    "js/markings/target.js",
    "js/world.js",
+   "js/roundabouts.js",
    "js/car/controls.js",
    "js/car/sensor.js",
    "js/car/network.js",
@@ -42,6 +43,7 @@ const FILES = [
    "js/school/lessons.js",
    "js/school/progress.js",
    "js/school/quiz.js",
+   "js/school/stateQuiz.js",
    "js/school/hazards.js",
    "js/school/practiceLog.js",
    "js/school/badges.js",
@@ -53,14 +55,15 @@ const FILES = [
    "js/i18n/es-lessons.js",
    "js/i18n/es-pages.js",
    "js/i18n/es-quiz.js",
+   "js/i18n/es-states.js",
 ];
 
 const EXPORTS = [
    "Point", "Segment", "Polygon", "Envelope", "Graph", "SpatialGrid", "Osm",
-   "WorldGenerator", "World", "Building", "Tree", "Marking", "Stop", "Yield",
+   "WorldGenerator", "World", "Roundabouts", "Building", "Tree", "Marking", "Stop", "Yield",
    "Crossing", "Parking", "Light", "Start", "Target", "Car", "Sensor",
    "NeuralNetwork", "Level", "TrafficCar", "TrafficNetwork", "EmergencyVehicle", "Pathfinder", "Route", "MinHeap", "Genetics", "Simulation", "Places",
-   "DrivingSchool", "DrivingCoach", "LESSONS", "Pedestrian", "Crowd", "Progress", "Quiz", "QUIZ_BANK", "SIGNS", "Hazards", "PracticeLog", "Badges", "BADGES", "DriveRecorder", "Autopilot", "PhoneBuzz", "I18N",
+   "DrivingSchool", "DrivingCoach", "LESSONS", "Pedestrian", "Crowd", "Progress", "Quiz", "QUIZ_BANK", "SIGNS", "STATE_LAWS", "StateQuiz", "Hazards", "PracticeLog", "Badges", "BADGES", "DriveRecorder", "Autopilot", "PhoneBuzz", "I18N",
    "getIntersection", "distance", "average", "add", "subtract", "scale",
    "normalize", "angle", "lerp", "polysIntersect", "getNearestPoint", "perpendicular", "dot",
 ];

@@ -3,7 +3,7 @@
 // It only uses what a student can see (the route, signs and lights, other
 // cars and people). Pure logic, so whole lessons are tested in Node.
 class Autopilot {
-   // controls: the car's controls to press. turns: DrivingSchool.turnsOf(route)
+   // controls: the car's controls to press. turns: DrivingSchool.directionsOf(route, world)
    constructor({ sim, car, coach, controls, lesson, parkingSpot = null }) {
       this.sim = sim;
       this.car = car;
@@ -152,6 +152,7 @@ class Autopilot {
             controls.signal = "left";
             this.#look("left", blocker);
             if (this.#otherLaneClear(blocker)) {
+               this.#look("left", "go" + this.#key(blocker)); // one more look, right before pulling out
                if (!this.passing) say("go" + this.#key(blocker), "Signaled, blind spot checked, lane's clear: going around", "Not too fast, and leave room beside the truck.");
                this.passing = blocker;
             } else {
@@ -184,12 +185,33 @@ class Autopilot {
          this.yielding = null;
       }
 
+      // roundabouts: slow down, yield to cars coming round, keep to the
+      // middle of the ring, and signal before the exit
+      const round = turns.find((t) => t.roundabout && t.exitAt > loc.progress - 40);
+      if (round) {
+         const toEntry = round.at - loc.progress;
+         if (toEntry < 450) {
+            say(round, "Roundabout ahead: slowing down and looking left", "Cars already in it go first. We're taking exit {exit}.", Infinity, { exit: round.exit });
+            target = limit(1.1, "roundabout");
+         }
+         if (toEntry < 150 && distance(p1, round.roundabout.center) < round.roundabout.radius + rw / 2) {
+            aim = p1; // the ring is one-way: drive down its middle, like everyone else
+         }
+         if (toEntry < 0) {
+            say("in" + this.#key(round), "Going counterclockwise, island on our left", "And no stopping in the roundabout unless we have to.");
+         }
+         if (round.exitAt - loc.progress < 170 && loc.progress < round.exitAt + 40) {
+            controls.signal = "right";
+            say("out" + this.#key(round), "Our exit is next: signaling right", "So drivers waiting to come in know we're leaving.");
+         }
+      }
+
       const desired = -angle(subtract(aim, car)) - Math.PI / 2;
       let steer = desired - car.angle;
       steer = Math.atan2(Math.sin(steer), Math.cos(steer));
 
       // turns: signal early, slow down before the corner
-      const next = turns.find((t) => t.at > loc.progress - 10);
+      const next = turns.find((t) => !t.roundabout && t.at > loc.progress - 10);
       if (next && next.at - loc.progress < 200) target = limit(1.1, "turn");
       if (Math.abs(steer) > 0.35) target = limit(0.9, "steering");
       // bends in the road (not just turns at junctions): slow down before them
@@ -217,6 +239,18 @@ class Autopilot {
                   this.served.add(m);
                   this.stopWait = 0;
                }
+            }
+         }
+         if (m instanceof Yield) {
+            // a roundabout: wait at the line for anyone coming round
+            const rb = Roundabouts.at(this.world, m.center, 200);
+            if (rb && Roundabouts.trafficComing(rb, m.center, this.sim.traffic, { window: 1.6, roadWidth: rw })) {
+               say("yield" + this.#key(m), "Car coming round: waiting at the yield line", "It has the right of way. We go when there's a gap.", 600);
+               target = limit(gap < 12 ? 0 : gap / 60, "yield");
+               this.waitedAtYield = m;
+            } else if (this.waitedAtYield == m) {
+               say("gap" + this.#key(m), "There's our gap: in we go", "Turning right onto the ring.");
+               this.waitedAtYield = null;
             }
          }
          if (m instanceof Light) {

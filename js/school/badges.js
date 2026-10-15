@@ -13,6 +13,8 @@ const BADGES = [
       earned: ({ passed }) => passed.has("night") },
    { id: "parallel", emoji: "🅿️", title: "Parallel pro", about: "Pass Parallel parking",
       earned: ({ passed }) => passed.has("parallel") },
+   { id: "roundabouts", emoji: "🔄", title: "Round and round", about: "Pass Roundabouts",
+      earned: ({ passed }) => passed.has("roundabouts") },
    { id: "phone", emoji: "📵", title: "Phone down", about: "Pass Phone down without touching your phone",
       earned: ({ finished }) => finished.some((d) => d.lesson == "phone" && d.passed && !d.mistakes.includes("phone_use")) },
    { id: "roadtest", emoji: "🎓", title: "Road ready", about: "Pass the road test",

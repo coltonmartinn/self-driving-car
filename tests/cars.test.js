@@ -90,3 +90,14 @@ test("traffic stops at a red light and goes on green", () => {
    }
    assert.ok(car.x > 760, "didn't go on green: x " + car.x);
 });
+
+test("someone on foot brushing a stopped car isn't a crash, but driving into them is", () => {
+   const person = { isPedestrian: true, polygon: [{ x: -8, y: -38 }, { x: 8, y: -38 }, { x: 8, y: -22 }, { x: -8, y: -22 }] };
+   const stopped = new Car(0, 0, 30, 50, "AUTO", 0, 3);
+   stopped.update([], [person]);
+   assert.equal(stopped.damaged, false);
+   const moving = new Car(0, 0, 30, 50, "AUTO", 0, 3);
+   moving.speed = 1;
+   moving.update([], [person]);
+   assert.equal(moving.damaged, true);
+});

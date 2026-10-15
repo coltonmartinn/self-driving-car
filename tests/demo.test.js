@@ -52,6 +52,12 @@ test("the demo driver pulls over for an ambulance, coming towards it or from beh
    assert.ok(behind.coach.events.some((e) => e.rule == "yielded_emergency"));
 });
 
+test("the demo driver yields at roundabouts, goes round the right way and signals its exit", () => {
+   const r = clean("roundabouts", "beverly-hills", 1);
+   assert.ok(r.coach.events.filter((e) => e.rule == "roundabout_good").length >= 1);
+   assert.ok(r.said.some((s) => /waiting at the yield line/.test(s)), "it met a car coming round");
+});
+
 test("the demo driver leaves the phone alone", () => {
    clean("phone", "beverly-hills", 1);
 });

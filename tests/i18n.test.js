@@ -70,3 +70,14 @@ test("tr() fills in placeholders and falls back to English", () => {
    }
    assert.equal(I18N.tr("Stop signs"), "Stop signs");
 });
+
+test("every state-law question, answer and explanation is translated", () => {
+   const { StateQuiz, STATE_LAWS } = app;
+   const strings = [StateQuiz.TOPIC, "{state} laws"];
+   for (const code of Object.keys(STATE_LAWS)) {
+      for (const q of StateQuiz.questionsFor(code)) {
+         strings.push(q.q, ...q.options, ...q.whyParts.map(([text]) => text));
+      }
+   }
+   assert.deepEqual(missing(strings), []);
+});

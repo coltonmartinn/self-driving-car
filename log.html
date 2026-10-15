@@ -153,6 +153,9 @@
          const g = PracticeLog.goalFor(stateSelect.value);
          if (!g) return;
          goal = g;
+         try {
+            localStorage.setItem("home-state", g.state); // (the permit quiz asks about it)
+         } catch (e) {}
          goalHours.value = goal.hours;
          goalNight.value = goal.nightHours;
          store("practice-goal", goal);

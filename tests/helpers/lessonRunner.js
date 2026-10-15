@@ -4,15 +4,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { loadApp } = require("./loadApp");
 
-function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 * 60 * 4 } = {}) {
+function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 * 60 * 4, onFrame = null } = {}) {
    const app = loadApp({ seed });
    const { World, Simulation, DrivingSchool, DrivingCoach, LESSONS, Autopilot, Hazards } = app;
    const file = path.join(__dirname, "..", "..", "data", "cities", city + ".json");
-   const world = World.load(JSON.parse(fs.readFileSync(file, "utf8")));
+   let world = World.load(JSON.parse(fs.readFileSync(file, "utf8")));
    DrivingSchool.addTrafficControls(world);
    DrivingSchool.addCrosswalks(world);
    world.lightTiming = { green: 8, yellow: 3 };
    const lesson = LESSONS.find((l) => l.id == lessonId);
+   if (lesson.roundabouts) world = DrivingSchool.roundaboutWorld(world);
    const controls = {
       forward: false, reverse: false, left: false, right: false, signal: null, looked: null, lookCount: 0,
       cancelSignal() { this.signal = null; },
@@ -38,7 +39,7 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
    const spot = extras.spot;
    const pilot = new Autopilot({ sim, car, coach, controls, lesson, parkingSpot: spot });
    const hazards = lesson.hazards ? new Hazards(sim) : null;
-   const turns = DrivingSchool.turnsOf(sim.trip.route, DrivingSchool.junctionsOf(world));
+   const turns = DrivingSchool.directionsOf(sim.trip.route, world);
    const said = [];
    let still = 0;
    let frame = 0;
@@ -55,6 +56,7 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
       if (line) said.push(line.title);
       sim.step();
       coach.update(sim.others);
+      if (onFrame) onFrame({ app, sim, car, coach, pilot, frame });
       if (phone) {
          const e = phone.update(car);
          if (e && e.type == "ignored") coach.report("ignored_phone");

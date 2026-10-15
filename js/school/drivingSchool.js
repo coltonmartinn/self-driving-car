@@ -16,6 +16,15 @@ const DrivingSchool = {
          if (ns.length < 3) {
             continue;
          }
+         if (Roundabouts.isRingPoint(world, p)) {
+            // a roundabout: YIELD where each street comes in, nothing on the ring
+            for (const first of ns) {
+               if (Roundabouts.isRingPoint(world, first.point)) continue;
+               const marking = DrivingSchool.approachMarking(world, neighbors, p, first, "yield");
+               if (marking && !existing.some((m) => distance(m.center, marking.center) < rw)) added.push(marking);
+            }
+            continue;
+         }
          if (existing.some((m) => distance(m.center, p) < rw * 1.6)) {
             continue; // already has real signs or signals
          }
@@ -80,7 +89,8 @@ const DrivingSchool = {
       const dir = normalize(subtract(route.pointAt(setback - 10), route.pointAt(setback + 10)));
       const center = first.seg.oneWay ? at : add(at, scale(perpendicular(dir), rw / 4));
       const size = rw / 2;
-      return kind == "light" ? new Light(center, dir, size, size) : new Stop(center, dir, size, size);
+      return kind == "light" ? new Light(center, dir, size, size)
+         : kind == "yield" ? new Yield(center, dir, size, size) : new Stop(center, dir, size, size);
    },
 
    // Mid-block crosswalks on longer streets that have none (many places,
@@ -134,14 +144,45 @@ const DrivingSchool = {
       return s - Math.floor(s);
    },
 
-   // Points where a driver has a choice: junctions, and dead ends (U-turns)
+   // Points where a driver has a choice: junctions, and dead ends (U-turns).
+   // (Not the points on a roundabout: going round it isn't a turn.)
    junctionsOf(world) {
       const degree = new Map();
       for (const seg of world.graph.segments) {
          degree.set(seg.p1, (degree.get(seg.p1) || 0) + 1);
          degree.set(seg.p2, (degree.get(seg.p2) || 0) + 1);
       }
-      return new Set(world.graph.points.filter((p) => degree.get(p) != 2));
+      return new Set(world.graph.points.filter((p) => degree.get(p) != 2 && !Roundabouts.isRingPoint(world, p)));
+   },
+
+   // The roundabouts a route goes through: where it comes onto the ring and
+   // leaves it (distances along the route), and which exit it takes
+   roundaboutsOn(route, world) {
+      const found = [];
+      for (let i = 0; i < route.points.length; i++) {
+         if (!Roundabouts.isRingPoint(world, route.points[i])) continue;
+         const roundabout = Roundabouts.at(world, route.points[i], 2);
+         let j = i;
+         while (j + 1 < route.points.length && Roundabouts.isRingPoint(world, route.points[j + 1])) j++;
+         // exits passed on the way, counting the one taken
+         const isExit = (p) => roundabout.approaches.some((a) => a.exit && distance(a, p) < 2);
+         const exit = route.points.slice(i + 1, j + 1).filter(isExit).length;
+         if (j > i && j < route.points.length - 1) {
+            found.push({ roundabout, enterIndex: i, exitIndex: j, enterAt: route.cumulative[i], exitAt: route.cumulative[j], exit: Math.max(1, exit) });
+         }
+         i = j;
+      }
+      return found;
+   },
+
+   // Turn-by-turn directions: the turns at junctions, and the roundabouts
+   // (as { roundabout, at, exitAt, exit }), in order along the route
+   directionsOf(route, world) {
+      const turns = DrivingSchool.turnsOf(route, DrivingSchool.junctionsOf(world));
+      const rounds = DrivingSchool.roundaboutsOn(route, world).map((r) => ({
+         index: r.enterIndex, at: r.enterAt, exitAt: r.exitAt, point: route.points[r.enterIndex], turn: 0, roundabout: r.roundabout, exit: r.exit,
+      }));
+      return [...turns, ...rounds].sort((a, b) => a.at - b.at);
    },
 
    // Where and which way the route turns (+ = left, - = right, in radians).
@@ -155,10 +196,21 @@ const DrivingSchool = {
             continue;
          }
          const at = route.cumulative[i];
-         const a = subtract(route.points[i], route.pointAt(at - 60));
-         const b = subtract(route.pointAt(at + 60), route.points[i]);
-         // screen y points down, so a left turn has a negative cross product
-         const turn = Math.atan2(-(a.x * b.y - a.y * b.x), dot(a, b));
+         const turnOver = (reach) => {
+            const a = subtract(route.points[i], route.pointAt(at - reach));
+            const b = subtract(route.pointAt(at + reach), route.points[i]);
+            // screen y points down, so a left turn has a negative cross product
+            return Math.atan2(-(a.x * b.y - a.y * b.x), dot(a, b));
+         };
+         let turn = turnOver(60);
+         // a road can also curve round through a junction: the way it points
+         // coming in and going out (where the coach looks) shows a turn too
+         const dirIn = DrivingSchool.directionAt(route, at - 130);
+         const dirOut = DrivingSchool.directionAt(route, at + 150);
+         const wide = Math.atan2(-(dirIn.x * dirOut.y - dirIn.y * dirOut.x), dot(dirIn, dirOut));
+         if (Math.abs(turn) <= 0.6 && Math.abs(wide) > 0.7 && Math.sign(wide) == Math.sign(turn)) {
+            turn = wide;
+         }
          if (Math.abs(turn) > 0.6) {
             turns.push({ index: i, at, point: route.points[i], turn });
          }
@@ -187,7 +239,7 @@ const DrivingSchool = {
 
    // What a lesson's route should look like
    routeScore(features, kind) {
-      const { length, turns, stops, lights, crossings } = features;
+      const { length, turns, stops, lights, crossings, roundabouts = 0 } = features;
       const meters = length / Osm.UNITS_PER_METER;
       const near = (v, goal, spread) => -Math.abs(v - goal) / spread;
       switch (kind) {
@@ -201,6 +253,8 @@ const DrivingSchool = {
             return Math.min(turns, 4) * 2 + near(meters, 450, 120);
          case "crossings":
             return Math.min(crossings, 3) * 2 + near(meters, 450, 120);
+         case "roundabout": // through two roundabouts or so
+            return Math.min(roundabouts, 2) * 4 + near(meters, 500, 200) - lights * 0.5;
          case "following": // long straight-ish roads, to follow other cars
             return near(meters, 450, 150) - turns;
          default: // a full road test: a bit of everything
@@ -217,20 +271,45 @@ const DrivingSchool = {
          stops: controls.filter((c) => c.marking instanceof Stop).length,
          lights: controls.filter((c) => c.marking instanceof Light).length,
          crossings: DrivingSchool.crossingsOn(route, world).length,
+         roundabouts: (world.roundabouts || []).length ? DrivingSchool.roundaboutsOn(route, world).length : 0,
       };
+   },
+
+   // Routes a learner can follow: no hairpin turns through a junction, and
+   // not ending right after a turn (the GPS would say "turn, then arrive")
+   fairRoute(route, junctions) {
+      const turns = DrivingSchool.turnsOf(route, junctions);
+      return turns.every((t) => Math.abs(t.turn) < 2.2) &&
+         (turns.length == 0 || route.length - turns[turns.length - 1].at > 200);
    },
 
    // Try a few destinations and keep the one whose route suits the lesson
    pickTrip(sim, kind, tries = 30) {
       let best = null;
       const junctions = DrivingSchool.junctionsOf(sim.world);
+      // for roundabouts, some places just past one (few random trips go through one)
+      const beyond = [];
+      if (kind == "roundabout") {
+         const home = sim.home.point;
+         for (const rb of sim.world.roundabouts || []) {
+            const out = distance(rb.center, home);
+            beyond.push(...sim.world.graph.points.filter((p) => {
+               const d = distance(p, rb.center);
+               return d > rb.radius * 2.5 && d < 1500 && distance(p, home) > out;
+            }));
+         }
+      }
       for (let i = 0; i < tries; i++) {
-         const dest = sim.randomDestination();
-         if (!dest || !sim.setTrip(dest)) {
+         const dest = beyond.length > 0 && i % 2 == 0
+            ? beyond[Math.floor(sim.options.random() * beyond.length)]
+            : sim.randomDestination();
+         // (not on a roundabout: a trip doesn't end going round one)
+         if (!dest || Roundabouts.isRingPoint(sim.world, dest) || !sim.setTrip(dest)) {
             continue;
          }
          const features = DrivingSchool.features(sim.trip.route, sim.world, junctions);
-         const score = DrivingSchool.routeScore(features, kind);
+         // (an unfair route only if there's nothing else)
+         const score = DrivingSchool.routeScore(features, kind) - (DrivingSchool.fairRoute(sim.trip.route, junctions) ? 0 : 1000);
          if (!best || score > best.score) {
             best = { dest, score };
          }
@@ -453,12 +532,31 @@ const DrivingSchool = {
       return car;
    },
 
+   // A copy of `world` (with its signs and signals) where a few junctions near
+   // the start are roundabouts, for the roundabout lesson. Returns null if
+   // none would fit.
+   roundaboutWorld(world) {
+      const info = JSON.parse(JSON.stringify(world.toJSON()));
+      if (Roundabouts.build(info, { near: Simulation.findStart(world).point }) == 0) {
+         return null;
+      }
+      const copy = World.load(info);
+      copy.lightTiming = world.lightTiming;
+      DrivingSchool.addTrafficControls(copy);
+      return copy;
+   },
+
    // The next instruction for a driver at `progress` along the route
+   // (turns: from directionsOf, or turnsOf)
    nextInstruction(route, progress, turns = DrivingSchool.turnsOf(route)) {
-      const next = turns.find((t) => t.at > progress - 20);
+      const next = turns.find((t) => (t.roundabout ? t.exitAt : t.at) > progress - 20);
       const toEnd = route.length - progress;
       if (!next) {
          return { kind: "arrive", distance: toEnd };
+      }
+      if (next.roundabout) {
+         const inside = progress > next.at - 20;
+         return { kind: "roundabout", exit: next.exit, inside, distance: Math.max(0, (inside ? next.exitAt : next.at) - progress) };
       }
       const sharp = Math.abs(next.turn) > 2.4;
       return {

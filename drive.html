@@ -292,6 +292,7 @@
    <script src="js/markings/start.js"></script>
    <script src="js/markings/target.js"></script>
    <script src="js/world.js"></script>
+   <script src="js/roundabouts.js"></script>
    <script src="js/places.js"></script>
    <script src="js/placeSearch.js"></script>
    <script src="js/car/controls.js"></script>
@@ -324,8 +325,10 @@
 
       let featuredCities = [];
       let citySlug = null;
-      let world = null;
+      let world = null; // where we drive: the city, or for the roundabout lesson a copy of it with roundabouts
       let sim = null;
+      let cityWorld = null; // the city as it is
+      let roundaboutWorld; // its copy with roundabouts (null: none fit), made when first needed
       let lesson = null;
       let coach = null;
       let car = null;
@@ -472,18 +475,36 @@
       }
 
       function setWorld(newWorld, slug) {
-         world = newWorld;
          citySlug = slug;
          if (slug) setSaved("school-city", slug);
-         DrivingSchool.addTrafficControls(world);
-         DrivingSchool.addCrosswalks(world);
-         world.lightTiming = { green: 8, yellow: 3 }; // human-friendly, like real signals
-         sim = new Simulation(world, { playerControls: controls, trafficCount: 15 });
-         sim.manual = true;
-         sim.setTrafficOn(true); // background traffic while choosing a lesson
+         DrivingSchool.addTrafficControls(newWorld);
+         DrivingSchool.addCrosswalks(newWorld);
+         newWorld.lightTiming = { green: 8, yellow: 3 }; // human-friendly, like real signals
+         cityWorld = newWorld;
+         roundaboutWorld = undefined;
+         world = null;
+         useWorldFor(null);
          camera.x = sim.home.point.x;
          camera.y = sim.home.point.y;
          camera.zoom = 2.2;
+      }
+
+      // Drive in the city, or (for the roundabout lesson) its copy with
+      // roundabouts. Returns false if that copy has none.
+      function useWorldFor(l) {
+         let want = cityWorld;
+         if (l && l.roundabouts) {
+            if (roundaboutWorld === undefined) roundaboutWorld = DrivingSchool.roundaboutWorld(cityWorld);
+            want = roundaboutWorld;
+         }
+         if (!want) return false;
+         if (want != world) {
+            world = want;
+            sim = new Simulation(world, { playerControls: controls, trafficCount: 15 });
+            sim.manual = true;
+            sim.setTrafficOn(true); // background traffic while choosing a lesson
+         }
+         return true;
       }
 
       function cityName() {
@@ -517,6 +538,7 @@
          clearExtras();
          if (sim) sim.clearTrip();
          if (world) world.crowd = null;
+         if (cityWorld) useWorldFor(null);
          hud.style.display = "none";
          controls.enabled = false;
          renderPicker();
@@ -575,7 +597,14 @@
          hud.style.display = "none";
          introEmoji.textContent = l.emoji;
          introTitle.textContent = tr(l.title);
-         introSummary.textContent = tr(l.summary) + " " + tr("Driving in {city}.", { city: cityName() });
+         introSummary.textContent = tr(l.summary) + " " + tr("Driving in {city}.", { city: cityName() }) +
+            (l.roundabouts ? " " + tr("For this lesson, a few of its junctions are roundabouts.") : "");
+         if (l.roundabouts && cityWorld && roundaboutWorld === undefined) {
+            // build them while the student reads the intro
+            setTimeout(() => {
+               if (lesson == l && roundaboutWorld === undefined) roundaboutWorld = DrivingSchool.roundaboutWorld(cityWorld);
+            }, 60);
+         }
          introList.innerHTML = "";
          for (const line of l.learn) {
             const li = document.createElement("li");
@@ -593,7 +622,7 @@
             crash: "for crashes", ran_stop: "stop signs", red_light: "red lights", speeding: "speed",
             tailgating: "following distance", no_signal: "turn signals", wrong_side: "lane position",
             pedestrian_yield: "crosswalks", school_zone_speeding: "school zones", no_blind_spot_check: "blind spot checks",
-            unsafe_pass: "safe passing", emergency_yield: "pulling over for sirens",
+            unsafe_pass: "safe passing", emergency_yield: "pulling over for sirens", roundabout_no_yield: "roundabouts",
          };
          const list = rules.filter((r) => names[r]).map((r) => tr(names[r]));
          return list.slice(0, -1).join(", ") + " " + tr("and") + " " + list[list.length - 1];
@@ -604,6 +633,10 @@
       // demo: a careful driver drives and explains, and the student watches
       function beginDrive(sameTrip, demo = false) {
          if (!world || !lesson) return;
+         if (!useWorldFor(lesson)) {
+            showLoading("😕 " + tr("No room for a roundabout here. Try another city."), true);
+            return;
+         }
          const unitsPerMph = 1 / DrivingCoach.MPH_PER_UNIT;
          const limit = lesson.speedLimit * unitsPerMph;
          // traffic drives near the limit; in the following lesson a bit slower,
@@ -644,7 +677,7 @@
          pilot = demo ? new Autopilot({ sim, car, coach, controls, lesson, parkingSpot }) : null;
          stillFrames = 0;
          if (parkingSpot) world.destination = parkingSpot;
-         turns = DrivingSchool.turnsOf(sim.trip.route, DrivingSchool.junctionsOf(world));
+         turns = DrivingSchool.directionsOf(sim.trip.route, world);
          camera.x = car.x;
          camera.y = car.y;
          camera.angle = car.angle;
@@ -868,7 +901,7 @@
          offRouteFrames = loc.distance > world.roadWidth * 1.3 ? offRouteFrames + 1 : 0;
          if (offRouteFrames == 45) {
             if (sim.reroute(car)) {
-               turns = DrivingSchool.turnsOf(sim.trip.route, DrivingSchool.junctionsOf(world));
+               turns = DrivingSchool.directionsOf(sim.trip.route, world);
                toast({ severity: "info", title: "Rerouting…", tip: "Missed a turn? No problem, follow the new blue line." }, 3000);
             }
             offRouteFrames = 0;
@@ -1267,7 +1300,10 @@
 
          const route = sim.trip.route;
          const step = DrivingSchool.nextInstruction(route, car.fitness, turns);
-         const titles = { left: tr("Turn left"), right: tr("Turn right"), uturn: tr("Make a U-turn"), arrive: tr("Arrive") };
+         const titles = {
+            left: tr("Turn left"), right: tr("Turn right"), uturn: tr("Make a U-turn"), arrive: tr("Arrive"),
+            roundabout: step.inside ? tr("Leave at exit {exit}", { exit: step.exit }) : tr("Roundabout: take exit {exit}", { exit: step.exit }),
+         };
          const far = step.kind != "arrive" && step.distance > 2500;
          const pullOver = parkingSpot && step.kind == "arrive";
          navTitle.textContent = car.arrived ? tr("You've arrived") : far ? tr("Continue straight")
@@ -1294,6 +1330,8 @@
          right: svg("<path d='M14 38V24a8 8 0 0 1 8-8h14'/><path d='M28 8l8 8-8 8'/>"),
          left: svg("<path d='M30 38V24a8 8 0 0 0-8-8H8'/><path d='M16 8l-8 8 8 8'/>"),
          uturn: svg("<path d='M28 38V18a8 8 0 0 0-16 0v16'/><path d='M5 27l7 8 7-8'/>"),
+         // in from the bottom, counterclockwise round the island, out at the top
+         roundabout: svg("<path d='M22 42V33a11 11 0 0 0 11-11 11 11 0 0 0-11-11V4'/><path d='M15 10l7-7 7 7'/><circle cx='22' cy='22' r='4' fill='#fff' stroke='none'/>"),
          arrive: "<span>🏁</span>",
       };
 
@@ -1366,6 +1404,7 @@
                tr("avg reaction (most drivers: 1.5 s)"),
             ]
             : lesson.id == "parallel" ? [coach.stats.moves + 1, tr("moves to park")]
+            : lesson.id == "roundabouts" ? [s.praise.filter((e) => e.rule == "roundabout_good").length, tr("roundabouts done right")]
             : lesson.id == "stops" ? [s.fullStops, tr("full stops")]
                : lesson.id == "pedestrians" ? [s.praise.filter((e) => e.rule == "yielded_pedestrian").length, tr("people yielded to")]
                   : [s.signaledTurns + "/" + s.turns, tr("turns signaled")],
