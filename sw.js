@@ -2,7 +2,7 @@
 // Everything the pages need is saved on install; after that, pages load
 // from the saved copy at once and quietly refresh it in the background
 // (tests/pwa.test.js checks that this list covers every page's files).
-const CACHE = "self-driving-city-v12";
+const CACHE = "self-driving-city-v13";
 
 const APP_FILES = [
    "./",

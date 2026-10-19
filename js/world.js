@@ -1,6 +1,7 @@
 class World {
    // asphalt, a yellow center line on two-way roads, white edge lines
-   static STYLE = { road: "#575d66", centerLine: "#f2c230", edgeLine: "#f4f4f2", island: "#6fa055", curb: "#d9d6cc" };
+   static STYLE = { road: "#575d66", centerLine: "#f2c230", edgeLine: "#f4f4f2", island: "#6fa055", curb: "#d9d6cc",
+      label: "#ffffff", labelHalo: "rgba(40, 44, 50, 0.85)" };
 
    constructor(
       graph,
@@ -30,6 +31,7 @@ class World {
       this.buildings = [];
       this.trees = [];
       this.laneGuides = null; // computed on demand, see getLaneGuides()
+      this.streetLabels = null; // computed on demand, see getStreetLabels()
       this.mapEdges = new Set(); // road ends where the map was cut off (see #findMapEdges)
 
       this.markings = [];
@@ -150,6 +152,7 @@ class World {
       }
       this.roadBorders = Polygon.union(this.envelopes.map((e) => e.poly));
       this.laneGuides = null;
+      this.streetLabels = null;
       this.lightGroups = null;
       this.#computeIntersections();
    }
@@ -214,6 +217,129 @@ class World {
          this.buildings = this.#generateBuildings();
       }
       this.trees = this.#generateTrees();
+   }
+
+   // Where to write street names: each named street is followed through its
+   // pieces, and gets a label every so often along it, away from other
+   // labels. [{ x, y, dir, name, room }], room = how long the label may be
+   getStreetLabels() {
+      if (this.streetLabels) {
+         return this.streetLabels;
+      }
+      const labels = [];
+      const byName = new Map();
+      for (const seg of this.graph.segments) {
+         if (!seg.name) continue;
+         if (!byName.has(seg.name)) byName.set(seg.name, []);
+         byName.get(seg.name).push(seg);
+      }
+      const spacing = 1000; // a label about every 100 m
+      for (const [name, segs] of byName) {
+         // the street as runs of connected pieces
+         const ends = new Map();
+         for (const seg of segs) {
+            for (const p of [seg.p1, seg.p2]) {
+               if (!ends.has(p)) ends.set(p, []);
+               ends.get(p).push(seg);
+            }
+         }
+         const used = new Set();
+         const starts = [...ends.keys()].sort((a, b) => Number(ends.get(a).length == 2) - Number(ends.get(b).length == 2)); // ends of the street first
+         for (const start of starts) {
+            for (const first of ends.get(start)) {
+               if (used.has(first)) continue;
+               const run = [start];
+               let seg = first;
+               while (seg && !used.has(seg)) {
+                  used.add(seg);
+                  const next = seg.p1 == run[run.length - 1] ? seg.p2 : seg.p1;
+                  run.push(next);
+                  const onward = ends.get(next);
+                  seg = onward.length == 2 ? onward.find((s) => s != seg) : null;
+               }
+               labels.push(...this.#labelsAlong(run, name, spacing, labels));
+            }
+         }
+      }
+      this.streetLabels = labels;
+      return labels;
+   }
+
+   #labelsAlong(points, name, spacing, placed) {
+      const cumulative = [0];
+      for (let i = 1; i < points.length; i++) {
+         cumulative.push(cumulative[i - 1] + distance(points[i - 1], points[i]));
+      }
+      const length = cumulative[cumulative.length - 1];
+      const pointAt = (at) => {
+         let i = 0;
+         while (i < points.length - 2 && cumulative[i + 1] < at) i++;
+         const t = (at - cumulative[i]) / (cumulative[i + 1] - cumulative[i] || 1);
+         return lerp2D(points[i], points[i + 1], Math.max(0, Math.min(1, t)));
+      };
+      const room = Math.min(length - 40, 700);
+      if (room < 160) return [];
+      const count = Math.max(1, Math.floor(length / spacing));
+      const out = [];
+      for (let k = 0; k < count; k++) {
+         const at = (length * (k + 0.5)) / count;
+         const p = pointAt(at);
+         if ([...placed, ...out].some((l) => distance(l, p) < (l.name == name ? spacing / 2 : 260))) continue;
+         const dir = normalize(subtract(pointAt(at + 60), pointAt(at - 60)));
+         if (!dir.x && !dir.y) continue;
+         // (width: measured when first drawn, at that text size)
+         out.push({ x: p.x, y: p.y, dir, name, room: Math.min(room, Math.min(at, length - at) * 2 + 40), width: null, size: null });
+      }
+      return out;
+   }
+
+   // Street names written along the roads, always the right way up on the
+   // screen (the view can turn with the car), and skipped when they'd be too
+   // small to read or don't fit along the road
+   #drawStreetNames(ctx, inView) {
+      const labels = this.getStreetLabels();
+      if (labels.length == 0) return;
+      const m = ctx.getTransform();
+      const zoom = Math.hypot(m.a, m.b) / (typeof devicePixelRatio == "number" ? devicePixelRatio : 1);
+      if (zoom < 0.18) return;
+      const size = Math.max(26, 11 / zoom); // world units: at least ~11 px on screen
+      ctx.save();
+      ctx.font = "700 " + size + "px 'Plus Jakarta Sans', system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+      for (const label of labels) {
+         if (!inView({ left: label.x - 1, right: label.x + 1, top: label.y - 1, bottom: label.y + 1 })) continue;
+         if (label.width == null || label.size != size) {
+            label.width = ctx.measureText(label.name).width;
+            label.size = size;
+         }
+         if (label.width > label.room) continue;
+         // which way the road points on screen: flip text that would be upside down
+         const screenX = m.a * label.dir.x + m.c * label.dir.y;
+         const flip = screenX < 0 ? Math.PI : 0;
+         ctx.setTransform(m);
+         ctx.translate(label.x, label.y);
+         ctx.rotate(Math.atan2(label.dir.y, label.dir.x) + flip);
+         ctx.lineWidth = size * 0.28;
+         ctx.strokeStyle = World.STYLE.labelHalo;
+         ctx.strokeText(label.name, 0, 0);
+         ctx.fillStyle = World.STYLE.label;
+         ctx.fillText(label.name, 0, 0);
+      }
+      ctx.restore();
+   }
+
+   // The name of the street nearest to p (within `reach`), or null
+   streetNameAt(p, reach = this.roadWidth) {
+      let best = null;
+      for (const seg of this.graph.segments) {
+         if (!seg.name) continue;
+         if (Math.abs(seg.p1.x - p.x) > 2000 && Math.abs(seg.p2.x - p.x) > 2000) continue;
+         const d = seg.distanceToPoint(p);
+         if (d < reach && (!best || d < best.d)) best = { d, name: seg.name };
+      }
+      return best ? best.name : null;
    }
 
    // Lines running down the middle of each lane; markings snap to these
@@ -525,6 +651,7 @@ class World {
       if (this.destination) {
          this.destination.draw(ctx);
       }
+      this.#drawStreetNames(ctx, inView);
 
       if (this.crowd) {
          this.crowd.draw(ctx);

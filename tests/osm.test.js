@@ -111,3 +111,33 @@ test("roads cut off at the edge of a downloaded area run off the map, without cu
       assert.ok(Math.hypot(dest.x, dest.y) < 3000, "inside the area");
    }
 });
+
+test("streets keep their names, which are saved, loaded and written along the road", () => {
+   const m = 1 / 111320;
+   const n = (id, east, north) => ({ type: "node", id, lat: north / 110540, lon: east * m });
+   const data = {
+      elements: [
+         n(1, -250, 0), n(2, 0, 0), n(3, 250, 0), n(4, 0, 30), n(5, 0, 200),
+         { type: "way", id: 10, nodes: [1, 2, 3], tags: { highway: "residential", name: "Elm Street" } },
+         { type: "way", id: 11, nodes: [2, 4, 5], tags: { highway: "primary", ref: "US 101" } },
+      ],
+   };
+   const world = Places.buildWorld(data, { name: "Test", lat: 0, lon: 0, radius: 300 });
+   const names = new Set(world.graph.segments.map((s) => s.name));
+   assert.ok(names.has("Elm Street") && names.has("US 101"), "a route number when there's no name");
+   const again = World.load(JSON.parse(JSON.stringify(world.toJSON())));
+   assert.equal(again.graph.segments.filter((s) => s.name == "Elm Street").length, 2);
+   // where the car is, by name
+   assert.equal(again.streetNameAt({ x: 1200, y: 20 }), "Elm Street");
+   assert.equal(again.streetNameAt({ x: 30, y: -1500 }), "US 101");
+   assert.equal(again.streetNameAt({ x: 2000, y: 2000 }), null);
+   // labels: Elm Street (500 m, one run through the junction) gets a few, spread out; none overlap
+   const labels = again.getStreetLabels();
+   assert.equal(labels.filter((l) => l.name == "Elm Street").length, 5);
+   assert.ok(labels.every((l) => l.room >= 160));
+   for (const a of labels) {
+      for (const b of labels) {
+         if (a != b) assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= 260);
+      }
+   }
+});

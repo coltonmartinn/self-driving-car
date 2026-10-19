@@ -11,7 +11,8 @@ class Graph {
       const segments = info.segments.map((i) => new Segment(
          byKey.get(i.p1.x + "," + i.p1.y),
          byKey.get(i.p2.x + "," + i.p2.y),
-         i.oneWay
+         i.oneWay,
+         i.name
       ));
       return new Graph(points, segments);
    }

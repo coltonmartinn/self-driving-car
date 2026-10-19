@@ -77,6 +77,8 @@ const Osm = {
             tags.junction == "roundabout" ||
             tags.highway == "motorway";
          const reversed = tags.oneway == "-1";
+         // the street's name (or its route number, like "US 101")
+         const name = tags.name || tags.ref || null;
 
          for (let i = 1; i < way.nodes.length; i++) {
             let a = getPoint(way.nodes[i - 1]);
@@ -89,7 +91,7 @@ const Osm = {
             const key = a.id < b.id ? a.id + "-" + b.id : b.id + "-" + a.id;
             if (seen.has(key)) continue;
             seen.add(key);
-            segments.push(new Segment(a, b, oneWay));
+            segments.push(new Segment(a, b, oneWay, name));
          }
       }
 

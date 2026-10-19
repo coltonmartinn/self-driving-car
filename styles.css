@@ -953,6 +953,22 @@ body.app {
    opacity: 0.85;
 }
 
+#navText small {
+   display: block;
+   max-width: 320px;
+   margin-top: 2px;
+   overflow: hidden;
+   font-size: 12px;
+   font-weight: 600;
+   opacity: 0.8;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+
+#navText small[hidden] {
+   display: none;
+}
+
 #scoreCard {
    top: 12px;
    right: 12px;
@@ -1248,7 +1264,7 @@ body.touch .park-done {
 
 /* the demo driver's thoughts, under the directions */
 #caption {
-   top: 92px;
+   top: 110px;
    left: 50%;
    transform: translateX(-50%);
    display: flex;
@@ -2561,7 +2577,7 @@ body.editor {
    .school #dash,
    .school.touch #dash {
       bottom: auto;
-      top: 160px;
+      top: 172px;
       gap: 10px;
       padding: 6px 10px;
    }
@@ -2576,12 +2592,12 @@ body.editor {
    }
 
    #caption {
-      top: 236px;
+      top: 248px;
       font-size: 14px;
    }
 
    .phone-banner {
-      top: 160px;
+      top: 172px;
    }
 
    .limit-sign b {

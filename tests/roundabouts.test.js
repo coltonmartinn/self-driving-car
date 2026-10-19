@@ -141,3 +141,16 @@ test("traffic waits at the YIELD line for cars coming round, then goes in", () =
    assert.ok(run([coming], 550) > rb.radius + world.roadWidth / 2, "waits outside the ring");
    assert.ok(run([], 550) < rb.radius + 10, "goes in when it's clear");
 });
+
+test("streets into a roundabout keep their names", () => {
+   const c = new Point(0, 0);
+   const ends = [new Point(0, 1500), new Point(1500, 0), new Point(0, -1500), new Point(-1500, 0)];
+   const names = ["Oak Ave", "Elm St", "Oak Ave", "Elm St"];
+   const base = new World(new Graph([c, ...ends], ends.map((e, i) => new Segment(c, e, false, names[i]))));
+   const info = JSON.parse(JSON.stringify(base.toJSON()));
+   assert.equal(Roundabouts.build(info), 1);
+   const world = World.load(info);
+   const streets = world.graph.segments.filter((s) => !(Roundabouts.isRingPoint(world, s.p1) && Roundabouts.isRingPoint(world, s.p2)));
+   assert.deepEqual(streets.map((s) => s.name).sort(), ["Elm St", "Elm St", "Oak Ave", "Oak Ave"]);
+   assert.equal(world.streetNameAt(new Point(35, 900)), "Oak Ave");
+});

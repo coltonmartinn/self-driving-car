@@ -1,8 +1,12 @@
 class Segment {
-   constructor(p1, p2, oneWay = false) {
+   // name: the street's name, for real places (kept only if there is one)
+   constructor(p1, p2, oneWay = false, name = null) {
       this.p1 = p1;
       this.p2 = p2;
       this.oneWay = oneWay;
+      if (name) {
+         this.name = name;
+      }
    }
 
    length() {

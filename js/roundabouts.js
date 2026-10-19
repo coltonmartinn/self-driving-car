@@ -29,7 +29,7 @@ class Roundabouts {
       }
       info.graph = {
          points: graph.points.map((p) => ({ x: p.x, y: p.y })),
-         segments: graph.segments.map((s) => ({ p1: { x: s.p1.x, y: s.p1.y }, p2: { x: s.p2.x, y: s.p2.y }, oneWay: s.oneWay })),
+         segments: graph.segments.map((s) => ({ p1: { x: s.p1.x, y: s.p1.y }, p2: { x: s.p2.x, y: s.p2.y }, oneWay: s.oneWay, ...(s.name ? { name: s.name } : {}) })),
       };
       info.roundabouts = [...(info.roundabouts || []), ...made];
       return made.length;
@@ -90,7 +90,7 @@ class Roundabouts {
          byKey.set(key(p), point);
          return point;
       });
-      const segments = info.graph.segments.map((s) => ({ p1: byKey.get(key(s.p1)), p2: byKey.get(key(s.p2)), oneWay: s.oneWay }));
+      const segments = info.graph.segments.map((s) => ({ p1: byKey.get(key(s.p1)), p2: byKey.get(key(s.p2)), oneWay: s.oneWay, name: s.name }));
       return { points, segments };
    }
 
@@ -152,7 +152,7 @@ class Roundabouts {
          const skip = dist(x, b) < 20 && i + 1 < pts.length;
          const outer = skip ? pts[i + 1] : b;
          approaches.push({
-            angle: ang, point: x, outer, way,
+            angle: ang, point: x, outer, way, name: seg.name,
             removedPoints: pts.slice(1, skip ? i + 1 : i),
             removedSegs: segs.slice(0, skip ? i + 1 : i),
          });
@@ -216,8 +216,8 @@ class Roundabouts {
       }
       for (const ap of plan.approaches) {
          graph.segments.push(ap.way == "in"
-            ? { p1: ap.outer, p2: ap.point, oneWay: true }
-            : { p1: ap.point, p2: ap.outer, oneWay: ap.way == "out" });
+            ? { p1: ap.outer, p2: ap.point, oneWay: true, name: ap.name }
+            : { p1: ap.point, p2: ap.outer, oneWay: ap.way == "out", name: ap.name });
       }
       plan.roundabout.ring = ring.map((p) => ({ x: p.x, y: p.y }));
 

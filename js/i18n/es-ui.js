@@ -332,4 +332,7 @@ I18N.add("es", {
    "It has the right of way. We go when there's a gap.": "Tiene el derecho de paso. Entramos cuando haya un espacio.",
    "There's our gap: in we go": "Ahí está nuestro espacio: entramos",
    "Turning right onto the ring.": "Giramos a la derecha para entrar a la glorieta.",
+
+   // ---------- street names ----------
+   "in {distance}, onto {street}": "en {distance}, hacia {street}",
 });

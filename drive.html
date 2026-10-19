@@ -50,7 +50,7 @@
 
             <div id="navCard" class="hud" aria-live="polite">
                <div id="navArrow"></div>
-               <div id="navText"><b id="navTitle"></b><span id="navDistance"></span></div>
+               <div id="navText"><b id="navTitle"></b><span id="navDistance"></span><small id="navStreet" hidden></small></div>
             </div>
 
             <div id="scoreCard" class="hud hud-panel"><b id="scoreValue">100</b><span>Score</span></div>
@@ -665,6 +665,7 @@
          coach = new DrivingCoach(world, car, {
             speedLimit: lesson.speedLimit, rules: lesson.rules, followSeconds: lesson.followSeconds || 2, zones: extras.zones,
          });
+         streetCache = { at: -Infinity, now: null, onto: null };
          phone = lesson.phone ? new PhoneBuzz({ forcedFirst: !demo }) : null;
          phoneBanner.hidden = true;
          phoneScreen.hidden = true;
@@ -1308,12 +1309,31 @@
          const pullOver = parkingSpot && step.kind == "arrive";
          navTitle.textContent = car.arrived ? tr("You've arrived") : far ? tr("Continue straight")
             : pullOver ? tr(parkingSpot.parallel ? "Parallel park at the P" : "Pull over at the P") : titles[step.kind];
-         navDistance.textContent = car.arrived ? tr("Nice driving!") : tr(far ? "for {distance}" : "in {distance}", { distance: formatFeet(step.distance) });
+         const names = streetNames(route, step);
+         const turning = !car.arrived && !far && !pullOver && step.kind != "arrive" && names.onto && names.onto != names.now;
+         navDistance.textContent = car.arrived ? tr("Nice driving!")
+            : turning ? tr("in {distance}, onto {street}", { distance: formatFeet(step.distance), street: names.onto })
+               : tr(far ? "for {distance}" : "in {distance}", { distance: formatFeet(step.distance) });
+         navStreet.hidden = !names.now;
+         navStreet.textContent = names.now ? "📍 " + names.now : "";
          const arrow = car.arrived ? "arrive" : far ? "straight" : step.kind;
          if (navArrow.dataset.kind != arrow) {
             navArrow.dataset.kind = arrow;
             navArrow.innerHTML = ARROWS[arrow];
          }
+      }
+
+      // The street the car is on, and the one the next turn goes onto (real
+      // places only), looked up a few times a second
+      let streetCache = { at: -Infinity, now: null, onto: null };
+      function streetNames(route, step) {
+         if (Math.abs(coach.frame - streetCache.at) < 15) return streetCache;
+         const now = world.streetNameAt(car, world.roadWidth * 0.6);
+         const next = turns.find((t) => (t.roundabout ? t.exitAt : t.at) > car.fitness - 20);
+         const onto = next && step.kind != "arrive" ? world.streetNameAt(route.pointAt((next.roundabout ? next.exitAt : next.at) + 110), world.roadWidth * 0.6) : null;
+         // (in a junction there's no street: keep showing the last one)
+         streetCache = { at: coach.frame, now: now || streetCache.now, onto };
+         return streetCache;
       }
 
       function formatFeet(units) {
