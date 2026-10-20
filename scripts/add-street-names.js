@@ -1,6 +1,7 @@
-// Adds street names to the bundled cities in data/cities, without changing
-// their roads: each road piece still knows the OpenStreetMap nodes at its
-// ends, so it gets the name of the street both of them are on.
+// Adds street names (and posted speed limits) to the bundled cities in
+// data/cities, without changing their roads: each road piece still knows the
+// OpenStreetMap nodes at its ends, so it gets the name and limit of the
+// street both of them are on.
 // (Cities bundled from now on get names straight from the import.)
 //
 //   node scripts/add-street-names.js
@@ -10,6 +11,9 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { loadApp } = require("../tests/helpers/loadApp");
+
+const { Osm } = loadApp();
 
 const DIR = path.join(__dirname, "..", "data", "cities");
 const SERVERS = [
@@ -19,15 +23,17 @@ const SERVERS = [
    "https://overpass.kumi.systems/api/interpreter",
 ];
 
-// node id -> the names of the streets it's on, from Overpass ways
+// node id -> the streets it's on ({ name, limit }), from Overpass ways
 function addNames(names, elements) {
    for (const way of elements) {
       if (way.type != "way" || !way.tags || !way.tags.highway) continue;
-      const name = way.tags.name || way.tags.ref;
-      if (!name) continue;
+      const name = way.tags.name || way.tags.ref || null;
+      const limit = Osm.speedLimit(way.tags.maxspeed);
+      if (!name && !limit) continue;
+      const street = { id: way.id, name, limit };
       for (const node of way.nodes) {
-         if (!names.has(node)) names.set(node, new Set());
-         names.get(node).add(name);
+         if (!names.has(node)) names.set(node, new Map());
+         names.get(node).set(way.id, street);
       }
    }
    return names;
@@ -49,7 +55,7 @@ function cachedNames() {
 
 async function namesAround(place) {
    const around = "(around:" + (place.loadRadius || place.radius) + "," + place.lat + "," + place.lon + ")";
-   const query = '[out:json][timeout:60];way["highway"]["name"]' + around + ';way["highway"]["ref"]' + around + ";out body;";
+   const query = '[out:json][timeout:60];way["highway"]["name"]' + around + ';way["highway"]["ref"]' + around + ';way["highway"]["maxspeed"]' + around + ";out body;";
    for (let attempt = 0; attempt < 8; attempt++) {
       const server = SERVERS[attempt % SERVERS.length];
       const res = await fetch(server, {
@@ -81,22 +87,28 @@ async function main() {
       const names = covered ? cached : await namesAround(info.place);
       const idAt = new Map(info.graph.points.map((p) => [p.x + "," + p.y, p.id]));
       let named = 0;
+      let limited = 0;
       for (const seg of info.graph.segments) {
          const a = idAt.get(seg.p1.x + "," + seg.p1.y);
          const b = idAt.get(seg.p2.x + "," + seg.p2.y);
-         // the street both ends are on
-         const shared = [...(names.get(a) || [])].filter((n) => names.has(b) && names.get(b).has(n));
-         const name = shared.length == 1 ? shared[0] : null;
-         if (name) {
-            seg.name = name;
+         // the street (OSM way) both ends are on
+         const shared = names.has(a) && names.has(b) ? [...names.get(a).values()].filter((w) => names.get(b).has(w.id)) : [];
+         const names1 = new Set(shared.map((w) => w.name).filter(Boolean));
+         const limits = new Set(shared.map((w) => w.limit).filter(Boolean));
+         delete seg.name;
+         delete seg.speedLimit;
+         if (names1.size == 1) {
+            seg.name = [...names1][0];
             named++;
-         } else {
-            delete seg.name;
+         }
+         if (limits.size == 1) {
+            seg.speedLimit = [...limits][0];
+            limited++;
          }
       }
       if (named == 0) throw new Error("no street names matched for " + city.label);
       fs.writeFileSync(file, JSON.stringify(info));
-      console.log(city.label.padEnd(14), named + " of " + info.graph.segments.length + " road pieces named");
+      console.log(city.label.padEnd(14), named + " of " + info.graph.segments.length + " road pieces named, " + limited + " with a posted limit");
       await new Promise((r) => setTimeout(r, 2000)); // be gentle with the free map server
    }
 }

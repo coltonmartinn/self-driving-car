@@ -5,7 +5,9 @@
 // followSeconds (minimum following distance, default 2), schoolZone,
 // blockers (delivery trucks to pass), emergency (an ambulance comes),
 // phone (texts arrive while driving), roundabouts (drive in a copy of the city
-// with some roundabouts)
+// with some roundabouts), highway (drive the practice highway instead of the
+// city), drill (a short drill for one skill: stopMarks = marks to stop on,
+// leadCar = a car to follow)
 const LESSONS = [
    {
       id: "basics",
@@ -37,6 +39,24 @@ const LESSONS = [
       traffic: 12,
       speedLimit: 25,
       rules: ["crash", "curb", "ran_stop", "rolling_stop", "full_stop", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
+      id: "stopdrill",
+      emoji: "🎯",
+      title: "Stopping drill",
+      summary: "Stop with your bumper right on the line, from 25 mph.",
+      learn: [
+         "Three yellow STOP HERE lines are painted across your lane. Stop with your front bumper right at each one.",
+         "Come in at about 25 mph. Start braking early and gently, then ease off the brake just before you stop.",
+         "The coach measures how far from the line you stopped. Within 5 feet is a perfect stop.",
+      ],
+      route: "drill",
+      traffic: 4,
+      speedLimit: 30,
+      drill: true,
+      stopMarks: 3,
+      rules: ["crash", "curb", "stop_on_mark", "overshot_mark", "short_of_mark", "missed_mark", "slow_approach", "red_light", "ran_stop",
+         "wrong_side", "wrong_way", "speeding", "reckless_speed"],
    },
    {
       id: "lights",
@@ -82,6 +102,23 @@ const LESSONS = [
       traffic: 40,
       speedLimit: 30,
       rules: ["crash", "curb", "tailgating", "safe_gap", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
+      id: "gapdrill",
+      emoji: "⏱️",
+      title: "Following drill",
+      summary: "Keep 2-4 seconds behind a car that speeds up and slows down.",
+      learn: [
+         "Follow the orange car. It will speed up and slow down without warning.",
+         "Keep 2 to 4 seconds behind it: when it passes a mark, count \"one-thousand-one, one-thousand-two\" before you reach it.",
+         "When its brake lights come on, ease off right away, so you never have to brake hard.",
+      ],
+      route: "drill",
+      traffic: 4,
+      speedLimit: 30,
+      drill: true,
+      leadCar: true,
+      rules: ["crash", "curb", "tailgating", "kept_gap", "uneven_gap", "fell_behind", "red_light", "ran_stop", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
    },
    {
       id: "pedestrians",
@@ -163,6 +200,23 @@ const LESSONS = [
       speedLimit: 25,
       blockers: 2,
       rules: ["crash", "curb", "pass_no_signal", "no_blind_spot_check", "pass_return_signal", "unsafe_pass", "clean_pass", "wrong_side", "wrong_way", "speeding", "reckless_speed"],
+   },
+   {
+      id: "highway",
+      emoji: "🛣️",
+      title: "Highway driving",
+      summary: "Merge, change lanes, pass and exit at 55 mph.",
+      learn: [
+         "On the on-ramp, speed up to the speed of traffic. Signal left (Q), look over your left shoulder (Z), and merge into a gap.",
+         "To pass a slow truck: signal left, check your blind spot, move into the left lane, pass, then signal right (E), check (C) and move back.",
+         "Keep to the middle of your lane and stay right except to pass. Signal right well before the exit, and slow down on the ramp.",
+      ],
+      route: "highway",
+      traffic: 14,
+      speedLimit: 55,
+      highway: true,
+      rules: ["crash", "curb", "merge_slow", "merge_signal", "unsafe_merge", "merged_well", "lane_change_signal", "unsafe_lane_change", "clean_lane_change",
+         "no_blind_spot_check", "straddling", "too_slow_highway", "exit_signal", "tailgating", "wrong_way", "speeding", "reckless_speed"],
    },
    {
       id: "roundabouts",

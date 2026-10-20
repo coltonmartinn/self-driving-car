@@ -57,6 +57,24 @@
          </div>
       </section>
 
+      <section class="card quiz-card no-print" id="assignCard">
+         <span class="eyebrow">📌 Assignments</span>
+         <h2>Send the class a lesson</h2>
+         <p class="muted">
+            Pick a lesson and a place, then send the link. Students who open it get that lesson there, and
+            their progress link shows whether they've done it.
+         </p>
+         <div class="assign-form">
+            <label>Lesson <select id="assignLesson"></select></label>
+            <label>Where <select id="assignCity"></select></label>
+            <label class="wide">Note for students <input id="assignNote" maxlength="120" placeholder="For example: due Friday, aim for 90 or more"></label>
+         </div>
+         <div class="card-actions" style="justify-content: flex-start">
+            <button class="primary" onclick="makeAssignment()">Make the link</button>
+         </div>
+         <ul class="report-list" id="assignList"></ul>
+      </section>
+
       <section class="card quiz-card" id="classReport" hidden>
          <div class="report-top">
             <div>
@@ -72,6 +90,7 @@
          <div class="stat-row" id="classStats"></div>
          <p class="report-section">Teach this next: the most common mistakes</p>
          <ul class="report-list" id="classFocus"></ul>
+         <div id="classAssignments"></div>
          <p class="report-section">Students</p>
          <div class="table-scroll">
             <table class="lesson-table" id="classTable"></table>
@@ -88,6 +107,9 @@
    <script src="js/school/progress.js"></script>
    <script>
       let current = null; // the class shown, for the CSV download
+      let currentStudents = [];
+      let assignments = loadAssignments(); // the ones made here: [{ id, lesson, city, note, date }]
+      let cities = [];
       try {
          links.value = localStorage.getItem("class-links") || "";
       } catch (e) {}
@@ -115,7 +137,88 @@
             classReport.hidden = true;
             return;
          }
+         currentStudents = students;
          render(Progress.classSummary(students, LESSONS, DrivingCoach.RULES));
+      }
+
+      // ---------- assignments ----------
+
+      for (const l of LESSONS) {
+         const option = document.createElement("option");
+         option.value = l.id;
+         option.textContent = l.emoji + " " + tr(l.title);
+         assignLesson.append(option);
+      }
+      fetch("data/cities/index.json").then((r) => r.json()).catch(() => []).then((list) => {
+         cities = list;
+         for (const c of list) {
+            const option = document.createElement("option");
+            option.value = c.slug;
+            option.textContent = c.emoji + " " + c.label;
+            assignCity.append(option);
+         }
+         renderAssignments();
+      });
+
+      function loadAssignments() {
+         try {
+            return JSON.parse(localStorage.getItem("class-assignments")) || [];
+         } catch (e) {
+            return [];
+         }
+      }
+
+      function saveAssignments() {
+         try {
+            localStorage.setItem("class-assignments", JSON.stringify(assignments));
+         } catch (e) {}
+      }
+
+      function makeAssignment() {
+         assignments.unshift({ id: Progress.assignmentId(), lesson: assignLesson.value, city: assignCity.value, note: assignNote.value.trim(), date: Date.now() });
+         assignNote.value = "";
+         saveAssignments();
+         renderAssignments();
+         if (current) render(current);
+      }
+
+      function removeAssignment(id) {
+         assignments = assignments.filter((a) => a.id != id);
+         saveAssignments();
+         renderAssignments();
+         if (current) render(current);
+      }
+
+      function assignmentUrl(a) {
+         return Progress.assignmentLink(location.origin + location.pathname.replace("class.html", "drive.html"), a);
+      }
+
+      function describeAssignment(a) {
+         const l = LESSONS.find((x) => x.id == a.lesson);
+         const city = cities.find((c) => c.slug == a.city);
+         return (l ? l.emoji + " " + tr(l.title) : a.lesson) + " · " + (city ? city.label : a.city);
+      }
+
+      function renderAssignments() {
+         assignList.innerHTML = "";
+         for (const a of assignments) {
+            const li = document.createElement("li");
+            li.innerHTML = "<span>📌</span><div><b></b><span class='tip'></span><input readonly class='assign-link'></div>" +
+               "<button class='ghost small-btn'></button><button class='ghost small-btn'></button>";
+            li.querySelector("b").textContent = describeAssignment(a);
+            li.querySelector(".tip").textContent = a.note;
+            const link = li.querySelector("input");
+            link.value = assignmentUrl(a);
+            link.addEventListener("focus", () => link.select());
+            const [copy, remove] = li.querySelectorAll("button");
+            copy.textContent = "📋 " + tr("Copy");
+            copy.addEventListener("click", () => {
+               navigator.clipboard.writeText(link.value).then(() => (copy.textContent = "✓ " + tr("Copied")), () => link.select());
+            });
+            remove.textContent = tr("Remove");
+            remove.addEventListener("click", () => removeAssignment(a.id));
+            assignList.append(li);
+         }
       }
 
       function downloadCsv() {
@@ -141,6 +244,13 @@
             improvement(c.rows),
          ].map(([v, label]) => "<div class='stat'><b>" + v + "</b><span>" + label + "</span></div>").join("");
 
+         const status = Progress.assignmentStatus(currentStudents, assignments);
+         classAssignments.innerHTML = status.length == 0 ? "" :
+            "<p class='report-section'>" + tr("Assignments") + "</p><ul class='report-list'>" + status.map((a) =>
+               "<li><span>" + (a.done.length == n ? "✅" : "📌") + "</span><div><b>" + esc(describeAssignment(a)) + "</b> · " +
+               tr("{done} of {n} done", { done: a.done.length, n }) + "<span class='tip'>" +
+               (a.tried.length ? esc(tr("Started: {names}", { names: a.tried.join(", ") })) + " " : "") +
+               (a.notYet.length ? esc(tr("Not yet: {names}", { names: a.notYet.join(", ") })) : "") + "</span></div></li>").join("") + "</ul>";
          classFocus.innerHTML = c.focus.length == 0
             ? "<li>🌟 " + tr("No repeat mistakes across the class yet.") + "</li>"
             : c.focus.map((f) =>

@@ -182,7 +182,15 @@ const DrivingSchool = {
       const rounds = DrivingSchool.roundaboutsOn(route, world).map((r) => ({
          index: r.enterIndex, at: r.enterAt, exitAt: r.exitAt, point: route.points[r.enterIndex], turn: 0, roundabout: r.roundabout, exit: r.exit,
       }));
-      return [...turns, ...rounds].sort((a, b) => a.at - b.at);
+      // the practice highway: merge onto it, and take the exit
+      const highway = [];
+      if (world.highway) {
+         for (const [kind, p] of [["merge", world.highway.merge], ["exit", world.highway.exit]]) {
+            const i = route.points.indexOf(p);
+            if (i > 0) highway.push({ index: i, at: route.cumulative[i], point: p, turn: 0, kind });
+         }
+      }
+      return [...turns, ...rounds, ...highway].sort((a, b) => a.at - b.at);
    },
 
    // Where and which way the route turns (+ = left, - = right, in radians).
@@ -255,6 +263,8 @@ const DrivingSchool = {
             return Math.min(crossings, 3) * 2 + near(meters, 450, 120);
          case "roundabout": // through two roundabouts or so
             return Math.min(roundabouts, 2) * 4 + near(meters, 500, 200) - lights * 0.5;
+         case "drill": // quiet and straight: no lights, signs or turns in the way
+            return near(meters, 500, 150) - turns - lights * 2 - stops * 2;
          case "following": // long straight-ish roads, to follow other cars
             return near(meters, 450, 150) - turns;
          default: // a full road test: a bit of everything
@@ -284,7 +294,12 @@ const DrivingSchool = {
    },
 
    // Try a few destinations and keep the one whose route suits the lesson
-   pickTrip(sim, kind, tries = 30) {
+   // (stopMarks: for the stopping drill, prefer routes with room for that many marks)
+   pickTrip(sim, kind, tries = 30, stopMarks = 0) {
+      // the practice highway has one trip: on-ramp to exit
+      if (sim.world.highway) {
+         return sim.setTrip(sim.world.highway.end) ? sim.world.highway.end : null;
+      }
       let best = null;
       const junctions = DrivingSchool.junctionsOf(sim.world);
       // for roundabouts, some places just past one (few random trips go through one)
@@ -309,7 +324,8 @@ const DrivingSchool = {
          }
          const features = DrivingSchool.features(sim.trip.route, sim.world, junctions);
          // (an unfair route only if there's nothing else)
-         const score = DrivingSchool.routeScore(features, kind) - (DrivingSchool.fairRoute(sim.trip.route, junctions) ? 0 : 1000);
+         let score = DrivingSchool.routeScore(features, kind) - (DrivingSchool.fairRoute(sim.trip.route, junctions) ? 0 : 1000);
+         if (stopMarks) score += Math.min(stopMarks, Drills.stopMarksOn(sim.trip.route, sim.world, stopMarks).length) * 3;
          if (!best || score > best.score) {
             best = { dest, score };
          }
@@ -488,8 +504,9 @@ const DrivingSchool = {
 
 
    // A lesson's extras, after sim.startGeneration(): a school zone (with a
-   // crosswalk if it needs one), delivery trucks to pass. Returns the zones
-   // (for the coach) and the markings added (to take away afterwards).
+   // crosswalk if it needs one), delivery trucks to pass, a parking space,
+   // a drill's marks or lead car, the highway's slow trucks. Returns the zones
+   // (for the coach), the markings added (to take away afterwards) and the rest.
    setUpLesson(sim, lesson) {
       const route = sim.trip.route;
       const zones = [];
@@ -511,7 +528,12 @@ const DrivingSchool = {
       }
       const spot = lesson.parallel ? DrivingSchool.parallelSpotOn(sim, route)
          : lesson.pullover ? DrivingSchool.parkingSpotOn(route, sim.world) : null;
-      return { zones, added, spot };
+      // drills: lines to stop on, a car to follow
+      const marks = lesson.stopMarks ? Drills.stopMarksOn(route, sim.world, lesson.stopMarks) : [];
+      const lead = lesson.leadCar ? Drills.spawnLeadCar(sim, sim.cars[0]) : null;
+      // the highway: slow trucks to pass (40 mph)
+      const trucks = lesson.highway && sim.world.highway ? HighwayCourse.addSlowTrucks(sim, 40 / DrivingCoach.MPH_PER_UNIT) : [];
+      return { zones, added, spot, marks, lead, trucks };
    },
 
    // How a student's car handles: gentle like a real car, a little faster
@@ -553,6 +575,9 @@ const DrivingSchool = {
       const toEnd = route.length - progress;
       if (!next) {
          return { kind: "arrive", distance: toEnd };
+      }
+      if (next.kind) {
+         return { kind: next.kind, distance: Math.max(0, next.at - progress) };
       }
       if (next.roundabout) {
          const inside = progress > next.at - 20;

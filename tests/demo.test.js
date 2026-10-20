@@ -58,6 +58,23 @@ test("the demo driver yields at roundabouts, goes round the right way and signal
    assert.ok(r.said.some((s) => /waiting at the yield line/.test(s)), "it met a car coming round");
 });
 
+test("the demo driver stops right on each mark in the stopping drill", () => {
+   const r = clean("stopdrill", "san-francisco", 1);
+   assert.equal(r.coach.markResults.length, 3);
+   assert.ok(r.coach.markResults.every((d) => Math.abs(d) <= 15));
+});
+
+test("the demo driver keeps 2-4 seconds behind the lead car in the following drill", () => {
+   const r = clean("gapdrill", "beverly-hills", 1);
+   assert.ok(r.coach.events.some((e) => e.rule == "kept_gap"));
+});
+
+test("the demo driver merges, passes and exits on the highway", () => {
+   const r = clean("highway", "beverly-hills", 1);
+   assert.ok(r.coach.events.some((e) => e.rule == "merged_well"));
+   assert.ok(r.coach.events.filter((e) => e.rule == "clean_lane_change").length >= 2, "out to pass, and back");
+});
+
 test("the demo driver leaves the phone alone", () => {
    clean("phone", "beverly-hills", 1);
 });

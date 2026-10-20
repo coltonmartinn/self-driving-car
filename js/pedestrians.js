@@ -46,6 +46,14 @@ class Pedestrian {
       } else if (this.state == "crossing") {
          const [a, b] = this.ends;
          const length = distance(a, b);
+         if (this.t >= 0.98) {
+            // at the far curb: across, onto the sidewalk (never frozen at the edge)
+            this.t = 1;
+            this.state = "done";
+            this.blockedBy = null;
+            this.#place();
+            return;
+         }
          // nobody walks into the side of a car: they wait for it to move on
          // (and it shouldn't wait for them). Only a car driving into
          // someone hits them.

@@ -77,6 +77,62 @@ class DrivingCoach {
          severity: "minor", title: "Didn't signal your exit",
          tip: "Signal right as you pass the exit before yours, so drivers waiting to enter know you're leaving.",
       },
+      overshot_mark: {
+         severity: "major", title: "Stopped past the mark",
+         tip: "Brake earlier and more gradually. Watch the mark, not the hood, and ease off the brake just before you stop.",
+      },
+      short_of_mark: {
+         severity: "minor", title: "Stopped short of the mark",
+         tip: "Roll a little closer before the final stop: aim for your front bumper right at the line.",
+      },
+      missed_mark: {
+         severity: "major", title: "Didn't stop at the mark",
+         tip: "Every mark is a stop. Start slowing early so you can stop on the line.",
+      },
+      slow_approach: {
+         severity: "minor", title: "Came in too slowly",
+         tip: "For this drill, come in at about 25 mph so you practice a real stop, then brake smoothly.",
+      },
+      uneven_gap: {
+         severity: "minor", title: "Gap kept changing too much",
+         tip: "Watch the car ahead: when its brake lights come on, ease off early. Aim for 2-4 seconds the whole time.",
+      },
+      fell_behind: {
+         severity: "minor", title: "Fell too far behind",
+         tip: "More than about 5 seconds back invites other drivers to cut in. Keep 2-4 seconds.",
+      },
+      merge_slow: {
+         severity: "major", title: "Merged too slowly",
+         tip: "Use the on-ramp to speed up to the speed of traffic (about 50 mph here) before you merge.",
+      },
+      merge_signal: {
+         severity: "minor", title: "Merged without signaling",
+         tip: "Signal left on the ramp, so drivers on the highway see you coming.",
+      },
+      unsafe_merge: {
+         severity: "major", title: "Merged into another car's space",
+         tip: "Pick your gap from the ramp: check your mirror and over your shoulder, then speed up or ease off to slot in.",
+      },
+      lane_change_signal: {
+         severity: "minor", title: "Changed lanes without signaling",
+         tip: "Signal for about 3 seconds before you change lanes.",
+      },
+      unsafe_lane_change: {
+         severity: "major", title: "Changed lanes too close to another car",
+         tip: "Check your mirror and blind spot. Only move over into a real gap: a car length or more, and nobody closing fast.",
+      },
+      straddling: {
+         severity: "minor", title: "Drove on the lane line",
+         tip: "Keep to the middle of your lane. A lane change should take a few seconds, not a long drift.",
+      },
+      too_slow_highway: {
+         severity: "minor", title: "Too slow for the highway",
+         tip: "Driving far below the flow of traffic is dangerous too. Keep up with traffic, up to the limit.",
+      },
+      exit_signal: {
+         severity: "minor", title: "Took the exit without signaling",
+         tip: "Signal right well before the exit, then slow down on the ramp, not on the highway.",
+      },
       hit_by_traffic: {
          severity: "info", title: "Another car hit you",
          tip: "Not your fault this time. Out on the road, keep scanning your mirrors and leave yourself an escape route.",
@@ -142,6 +198,10 @@ class DrivingCoach {
       yielded_emergency: { severity: "good", title: "Pulled over for the ambulance" },
       clean_pass: { severity: "good", title: "Passed safely" },
       roundabout_good: { severity: "good", title: "Handled the roundabout well" },
+      stop_on_mark: { severity: "good", title: "Stopped right on the mark" },
+      kept_gap: { severity: "good", title: "Kept a steady gap" },
+      merged_well: { severity: "good", title: "Merged smoothly" },
+      clean_lane_change: { severity: "good", title: "Clean lane change" },
       checked_blind_spot: { severity: "good", title: "Checked your blind spot" },
       waited_green: { severity: "good", title: "Waited for the green light" },
       signaled: { severity: "good", title: "Signaled the turn" },
@@ -168,13 +228,17 @@ class DrivingCoach {
 
    // options: speedLimit (mph), rules (ids to judge; default all),
    // followSeconds (the minimum gap to the car ahead: 2, or more in bad weather),
-   // zones (stretches of road with their own limit: [{ route, limit, kind }])
-   constructor(world, car, { speedLimit = 30, rules = null, followSeconds = 2, zones = [] } = {}) {
+   // zones (stretches of road with their own limit: [{ route, limit, kind }]),
+   // marks (lines to stop on, see Drills.stopMarksOn), lead (a car to follow
+   // in the following drill)
+   constructor(world, car, { speedLimit = 30, rules = null, followSeconds = 2, zones = [], marks = [], lead = null } = {}) {
       this.world = world;
       this.car = car;
       this.speedLimit = speedLimit;
       this.followSeconds = followSeconds;
       this.zones = zones;
+      this.limitFrame = -1; // (currentLimit, worked out once a frame)
+      this.limitNow = null;
       this.rules = rules ? new Set(rules) : null;
 
       this.events = [];
@@ -214,6 +278,11 @@ class DrivingCoach {
       this.seenLooks = car.controls.lookCount || 0;
       this.pass = null; // a pass in progress (around a parked vehicle)
       this.roundabouts = world.roundabouts || [];
+      this.marks = marks.map((m) => ({ ...m, fastest: 0, judged: false }));
+      this.markResults = []; // how far from each mark's line the car stopped (units, + = short)
+      this.lead = lead;
+      this.gap = { frames: 0, inBand: 0, behind: 0, judged: false };
+      this.hw = null; // the highway lesson: merging, lanes, exit
       this.inRoundabout = null; // { rb, since, wrongWay } while going round one
       this.emergencies = new Map(); // emergency vehicle -> what we did as it came
       this.judgedEmergencies = new Set(); // (each one is judged once)
@@ -285,6 +354,9 @@ class DrivingCoach {
       this.lastPos = pos;
       this.stats.topSpeed = Math.max(this.stats.topSpeed, DrivingCoach.mph(car.speed));
 
+      if (car.arrived && this.lead && !this.gap.judged) {
+         this.#judgeGap();
+      }
       if (car.damaged && !car.arrived) {
          const other = traffic.find((t) => t != car && polysIntersect(car.polygon, t.polygon));
          if (!other) {
@@ -323,6 +395,9 @@ class DrivingCoach {
       this.#checkCrosswalks(traffic.filter((t) => t.isPedestrian));
       this.#checkFollowing(traffic);
       this.#checkRoundabouts(traffic);
+      if (this.marks.length) this.#checkMarks();
+      if (this.lead) this.#checkGap();
+      if (this.world.highway) this.#checkHighway(traffic);
       this.#checkLane(traffic);
       this.#checkTurns(signal);
       return this.events.slice(before);
@@ -343,10 +418,35 @@ class DrivingCoach {
       return null;
    }
 
-   // The speed limit where the car is now (mph)
+   // The posted limit on the road at p (mph), where the map has one that
+   // makes sense for a lesson (15-45 mph); otherwise null
+   postedLimitAt(p) {
+      let best = null;
+      for (const seg of this.segmentGrid.query(SpatialGrid.boundsAround(p, 150))) {
+         const d = seg.distanceToPoint(p);
+         if (d < this.world.roadWidth / 2 && (!best || d < best.d)) best = { d, seg };
+      }
+      const limit = best && best.seg.speedLimit;
+      return limit >= 15 && limit <= 45 ? limit : null;
+   }
+
+   // The speed limit at p (mph): the posted one, or the lesson's, and lower in a zone
+   limitAt(p) {
+      const zone = this.zoneAt(p);
+      const posted = this.postedLimitAt(p) ?? this.speedLimit;
+      return zone ? Math.min(zone.limit, posted) : posted;
+   }
+
+   // The speed limit where the car is now (mph). In a junction it stays what
+   // it was, rather than flicking between the crossing streets' limits.
    get currentLimit() {
-      const zone = this.zoneAt(this.car);
-      return zone ? Math.min(zone.limit, this.speedLimit) : this.speedLimit;
+      if (this.limitFrame !== this.frame) {
+         this.limitFrame = this.frame;
+         if (this.limitNow == null || !this.nearJunction(this.world.roadWidth * 0.9)) {
+            this.limitNow = this.limitAt(this.car);
+         }
+      }
+      return this.limitNow;
    }
 
    // Did the student look over that shoulder in the last `frames` frames?
@@ -670,6 +770,142 @@ class DrivingCoach {
          }
          seen.along = along;
       }
+   }
+
+   // The stopping drill: stop with the front bumper on each mark's line
+   #checkMarks() {
+      const car = this.car;
+      const feet = (units) => Math.round(Math.abs(units) / 3.048);
+      for (const m of this.marks) {
+         if (m.judged) continue;
+         const d = Drills.distanceToMark(car, m);
+         const lateral = Math.abs(dot(subtract(car, m.center), perpendicular(m.dir)));
+         if (lateral > this.world.roadWidth / 2 || dot(this.heading(), m.dir) < 0.6) continue;
+         if (d > 0 && d < 300) m.fastest = Math.max(m.fastest, Math.abs(car.speed));
+         if (d < -150) {
+            m.judged = true;
+            this.report("missed_mark");
+         } else if (d < 150 && Math.abs(car.speed) < 0.03 && m.fastest > 0) {
+            m.judged = true;
+            this.markResults.push(d);
+            // (on a slow street, a little slower is fine)
+            if (DrivingCoach.mph(m.fastest) < Math.min(18, this.limitAt(m.center) - 6)) this.report("slow_approach", DrivingCoach.detail("{mph} mph at most", { mph: Math.round(DrivingCoach.mph(m.fastest)) }));
+            if (d < -15) this.report("overshot_mark", DrivingCoach.detail("{feet} ft past the line", { feet: feet(d) }));
+            else if (d > 15) this.report("short_of_mark", DrivingCoach.detail("{feet} ft short of the line", { feet: feet(d) }));
+            else this.report("stop_on_mark", DrivingCoach.detail("{feet} ft from the line", { feet: feet(d) }));
+         }
+      }
+   }
+
+   // The following drill: how much of the time the gap to the lead car was
+   // 2-4 seconds (reported at the end)
+   #checkGap() {
+      const car = this.car;
+      const lead = this.lead;
+      const rel = subtract(lead, car);
+      const along = dot(rel, this.heading());
+      // (only while both are moving: stopped at a light, the gap means nothing)
+      if (along <= 0 || along > 900 || car.speed < 1 || lead.speed < 1 || Math.abs(rel.x * this.heading().y - rel.y * this.heading().x) > 60) {
+         return;
+      }
+      const seconds = (along - car.height) / car.speed / 60;
+      const g = this.gap;
+      // too far back but already at the limit: catching up as fast as allowed
+      // (or slowing for a lower limit just ahead)
+      const limit = Math.min(this.currentLimit, this.limitAt(add(car, scale(this.heading(), 140))));
+      const atLimit = DrivingCoach.mph(car.speed) >= limit - 5;
+      if (seconds > 4.5 && atLimit) {
+         g.behind = 0;
+         return;
+      }
+      g.frames++;
+      if (seconds >= 1.8 && seconds <= 4.5) g.inBand++;
+      g.behind = seconds > 5.5 ? g.behind + 1 : 0;
+      if (g.behind == 300) this.report("fell_behind", DrivingCoach.detail("{seconds} s behind", { seconds: seconds.toFixed(1) }));
+   }
+
+   #judgeGap() {
+      const g = this.gap;
+      g.judged = true;
+      if (g.frames < 300) return;
+      const percent = Math.round((g.inBand / g.frames) * 100);
+      const detail = DrivingCoach.detail("{percent}% of the time 2-4 s behind", { percent });
+      this.report(percent >= 70 ? "kept_gap" : "uneven_gap", detail);
+   }
+
+   // The highway: merge at speed with a signal and a look, change lanes only
+   // into a real gap, keep to a lane, keep up, and signal the exit
+   #checkHighway(traffic) {
+      const car = this.car;
+      const hw = this.world.highway;
+      const here = HighwayCourse.laneAt(this.world, car);
+      const h = this.hw || (this.hw = { merged: false, exited: false, nearest: null, straddle: 0, slow: 0 });
+      const mph = DrivingCoach.mph(car.speed);
+      if (!h.merged) {
+         if (here && here.lane == "right" && Math.abs(here.offset) < 40 && car.x > HighwayCourse.MERGE_X - 150) {
+            h.merged = true;
+            h.nearest = "right";
+            const before = this.events.length;
+            // too slow for the traffic you're joining (the car ahead in the lane, or the limit)
+            const ahead = traffic.filter((o) => o != car && !o.isPedestrian && o.x > car.x && o.x - car.x < 700 && Math.abs(o.y - hw.east.right) < 30)
+               .sort((a, b) => a.x - b.x)[0];
+            const flow = Math.min(this.speedLimit, ahead ? DrivingCoach.mph(ahead.speed) : this.speedLimit);
+            if (mph < this.speedLimit - 15 && mph < flow - 10) this.report("merge_slow", DrivingCoach.detail("{mph} mph", { mph: Math.round(mph) }));
+            if (!this.signaledRecently("left", 300)) this.report("merge_signal");
+            if (!this.lookedRecently("left", 420)) this.report("no_blind_spot_check", DrivingCoach.detail("left, before merging"));
+            if (this.#crowded(traffic, "right")) this.report("unsafe_merge");
+            if (this.events.length == before) this.report("merged_well");
+            if (car.controls.cancelSignal) car.controls.cancelSignal();
+         }
+         return;
+      }
+      if (!here) {
+         if (!h.exited && car.x > HighwayCourse.EXIT_X - 100 && car.y > hw.east.right + 40) {
+            h.exited = true;
+            if (!this.signaledRecently("right", 300)) this.report("exit_signal");
+            if (car.controls.cancelSignal) car.controls.cancelSignal();
+         }
+         return;
+      }
+      // crossing the line into the other lane: a lane change
+      if (here.lane != h.nearest) {
+         const side = here.lane == "left" ? "left" : "right";
+         const before = this.events.length;
+         if (!this.signaledRecently(side, 300)) this.report("lane_change_signal");
+         if (!this.lookedRecently(side, 420)) this.report("no_blind_spot_check", DrivingCoach.detail(side == "left" ? "left, before changing lanes" : "right, before changing lanes"));
+         if (this.#crowded(traffic, here.lane)) this.report("unsafe_lane_change");
+         if (this.events.length == before) this.report("clean_lane_change");
+         h.nearest = here.lane;
+      }
+      if (Math.abs(here.offset) < 22) {
+         if (h.straddle > 0 && car.controls.cancelSignal && Math.abs(here.offset) < 12) car.controls.cancelSignal();
+         h.straddle = 0;
+      } else {
+         h.straddle++;
+         if (h.straddle == 240) this.report("straddling");
+      }
+      // too slow, with the road ahead clear
+      const clear = !traffic.some((o) => o != car && !o.isPedestrian && o.x > car.x && o.x - car.x < 800 &&
+         HighwayCourse.laneAt(this.world, o)?.lane == here.lane);
+      // (not while signaling: slowing to find a gap to change lanes is fine)
+      h.slow = mph < this.speedLimit - 15 && clear && !car.controls.signal ? h.slow + 1 : 0;
+      if (h.slow == 300) this.report("too_slow_highway", DrivingCoach.detail("{mph} mph", { mph: Math.round(mph) }));
+   }
+
+   // Anyone beside the car in that lane, or coming up behind too close for
+   // how fast they're closing? (the highway goes east: + x is ahead)
+   #crowded(traffic, lane) {
+      const car = this.car;
+      return traffic.some((o) => {
+         if (o == car || o.isPedestrian || o.isParked) return false;
+         const theirs = HighwayCourse.laneAt(this.world, o);
+         if (!theirs || theirs.lane != lane) return false;
+         const rel = o.x - car.x;
+         const reach = (o.height + car.height) / 2;
+         if (rel >= 0) return rel - reach < 30; // just ahead (or beside)
+         const closing = Math.max(0, o.speed - car.speed);
+         return -rel - reach < 20 + closing * 60; // behind, closing within a second
+      });
    }
 
    // The roundabout the car is at or near (within `margin` of the ring), if any

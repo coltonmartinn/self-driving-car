@@ -7,6 +7,7 @@ class Segment {
       if (name) {
          this.name = name;
       }
+      this.speedLimit = undefined; // the posted limit in mph, where the map has one (not saved when unknown)
    }
 
    length() {

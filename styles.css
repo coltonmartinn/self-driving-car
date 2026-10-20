@@ -1584,6 +1584,138 @@ body.touch #toasts {
    flex-basis: 260px;
 }
 
+.settings-card .toggle {
+   display: flex;
+   align-items: center;
+   gap: 10px;
+   margin: 10px 0;
+   font-weight: 600;
+   text-align: left;
+}
+
+.settings-card .toggle input {
+   width: 20px;
+   height: 20px;
+}
+
+/* larger text: the directions, dashboard, captions and messages while driving */
+body.big-text #navText b {
+   font-size: 28px;
+}
+
+body.big-text #navText span {
+   font-size: 18px;
+}
+
+body.big-text #navText small {
+   font-size: 16px;
+}
+
+body.big-text .pill,
+body.big-text .toast,
+body.big-text #caption {
+   font-size: 17px;
+}
+
+body.big-text .speedo b {
+   font-size: 42px;
+}
+
+/* high contrast: solid black panels with white text and outlines */
+body.high-contrast #navCard,
+body.high-contrast .hud-panel,
+body.high-contrast .pill,
+body.high-contrast #caption,
+body.high-contrast .toast {
+   background: #000 !important;
+   color: #fff !important;
+   border: 2px solid #fff;
+   box-shadow: none;
+}
+
+body.high-contrast .limit-sign {
+   background: #fff;
+   color: #000;
+   border: 3px solid #000;
+}
+
+.assign-form {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 10px 14px;
+   margin: 6px 0 4px;
+}
+
+.assign-form label {
+   display: flex;
+   flex-direction: column;
+   gap: 4px;
+   font-size: 13px;
+   font-weight: 700;
+}
+
+.assign-form .wide {
+   grid-column: 1 / -1;
+}
+
+.assign-link {
+   width: 100%;
+   margin-top: 4px;
+   font-size: 12px;
+}
+
+@media (max-width: 560px) {
+   .assign-form {
+      grid-template-columns: 1fr;
+   }
+}
+
+.assignment-note {
+   margin: 0 0 10px;
+   padding: 8px 12px;
+   background: var(--sun);
+   color: var(--sun-ink);
+   border-radius: var(--radius-sm);
+   font-weight: 700;
+}
+
+.assignment-note[hidden] {
+   display: none;
+}
+
+.next-up {
+   display: flex;
+   align-items: center;
+   gap: 12px;
+   margin: 0 0 14px;
+   padding: 10px 14px;
+   background: var(--accent-soft);
+   border-radius: var(--radius-sm);
+}
+
+.next-up[hidden] {
+   display: none;
+}
+
+.next-up .emoji {
+   font-size: 24px;
+}
+
+.next-up div {
+   flex: 1;
+   min-width: 0;
+}
+
+.next-up div b,
+.next-up div span {
+   display: block;
+}
+
+.next-up div span {
+   color: var(--muted);
+   font-size: 13px;
+}
+
 .lesson-grid {
    display: grid;
    grid-template-columns: repeat(3, 1fr);

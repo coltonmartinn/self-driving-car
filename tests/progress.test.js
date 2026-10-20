@@ -94,3 +94,52 @@ test("the class spreadsheet shows each student's first and latest scores, for me
    assert.ok(csv[1].startsWith("\"Ana, R.\","), "names with commas are quoted: " + csv[1]);
    assert.ok(csv[1].includes(",70,90,"));
 });
+
+test("practice suggestions follow the mistakes that keep coming up", () => {
+   const R = DrivingCoach.RULES;
+   // every mistake points at a real lesson
+   for (const [rule, id] of Object.entries(Progress.PRACTICE)) {
+      assert.ok(R[rule], "unknown rule " + rule);
+      assert.ok(LESSONS.some((l) => l.id == id), rule + ": unknown lesson " + id);
+   }
+   let h = [];
+   const add = (id, rules, passed = rules.length == 0) => (h = Progress.add(h, Progress.record(lesson(id), summary(passed ? 95 : 70, rules, passed), { ended: "arrived", city: "Paris" })));
+   // nothing driven yet: start at the beginning
+   assert.equal(Progress.recommend(h, LESSONS, R).lesson.id, "basics");
+   add("basics", []);
+   assert.equal(Progress.recommend(h, LESSONS, R).lesson.id, "stops", "then the next lesson not passed");
+   // one minor slip isn't a pattern...
+   add("signals", ["no_signal"], true);
+   assert.equal(Progress.recommend(h, LESSONS, R).reason, "next");
+   // ...but rolling stops twice is, even in another lesson
+   add("roadtest", ["rolling_stop", "speeding"], false);
+   add("lights", ["rolling_stop"], true);
+   const r = Progress.recommend(h, LESSONS, R);
+   assert.equal(r.lesson.id, "stops");
+   assert.equal(r.rule, "rolling_stop");
+   assert.equal(r.count, 2);
+   // crashes in the latest drives come first
+   add("following", ["crash"], false);
+   add("following", ["crash"], false);
+   const crash = Progress.recommend(h, LESSONS, R);
+   assert.equal(crash.rule, "crash");
+   assert.equal(crash.lesson.id, "hazards");
+});
+
+test("assignments: a link with the lesson and city, and who has done it", () => {
+   const link = Progress.assignmentLink("https://x/drive.html", { id: "abc123", lesson: "stops", city: "paris", note: "Due Friday & aim for 90" });
+   assert.equal(link, "https://x/drive.html?city=paris&lesson=stops&assign=abc123&note=Due%20Friday%20%26%20aim%20for%2090");
+   assert.match(Progress.assignmentId(), /^[0-9a-z]{6}$/);
+   const drive = (passed, assignment) => Progress.record(lesson("stops"), summary(passed ? 95 : 60, [], passed), { ended: "arrived", city: "Paris", assignment });
+   const students = [
+      { name: "Ana", history: [drive(false, "abc123"), drive(true, "abc123")] },
+      { name: "Ben", history: [drive(false, "abc123")] },
+      { name: "Cy", history: [drive(true, null)] }, // passed, but not from the assignment link
+   ];
+   const [status] = Progress.assignmentStatus(students, [{ id: "abc123", lesson: "stops" }]);
+   assert.deepEqual([status.done, status.tried, status.notYet].map((x) => x.join()), ["Ana", "Ben", "Cy"]);
+   // the assignment survives the student's share link
+   const back = Progress.decode(Progress.encode("Ana", students[0].history));
+   assert.equal(back.history.map((d) => d.assignment).join(), "abc123,abc123");
+   assert.equal(Progress.decode(Progress.encode("Cy", students[2].history)).history[0].assignment, undefined);
+});

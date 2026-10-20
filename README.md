@@ -19,19 +19,22 @@ Plain JavaScript and HTML canvas, with **no libraries and no build step**. It st
 | --- | --- |
 | ![Lesson picker](docs/screenshots/lessons.png) | ![Report card](docs/screenshots/report-card.png) |
 
-Sixteen lessons, from your first drive to a final road test, in five real cities, your own town (search any place), or a city you built yourself:
+Nineteen lessons and drills, from your first drive to a final road test, in five real cities, your own town (search any place), or a city you built yourself:
 
 | Lesson | What the coach checks |
 | --- | --- |
 | 🚗 First drive | Staying in your lane, speed, not hitting anything |
 | 🛑 Stop signs | A full stop behind the line (rolling stops cost points; driving through fails) |
+| 🎯 Stopping drill | Stopping with the front bumper on a painted line from 25 mph, measured in feet |
 | 🚦 Traffic lights | Never crossing the stop line on red |
 | ↪️ Turn signals | Signaling before each turn, and in the right direction |
 | ↔️ Following distance | The 2-second rule, measured from your speed and the gap to the car ahead |
+| ⏱️ Following drill | Staying 2-4 seconds behind a car that keeps speeding up and slowing down: the share of the time you did |
 | 🚶 Crosswalks | Stopping for people on foot, and waiting until they've crossed |
 | 🏫 School zones | Slowing to 15 mph between the SCHOOL signs (speeding there is a major mistake) |
 | ⤵️ Pulling over | Signaling, a look over the right shoulder, then stopping inside a marked space at the curb |
 | 🅿️ Parallel parking | Backing into a space between two parked cars: position, distance from the curb, angle, number of moves |
+| 🛣️ Highway driving | On a practice highway at 55 mph: merging from the ramp at speed with a signal and a look, lane changes into real gaps, passing slow trucks, keeping to your lane, signaling the exit |
 | 🔄 Roundabouts | Yielding to cars already in the ring, going counterclockwise, signaling your exit. A few of the city's junctions become roundabouts for this lesson |
 | 🚚 Passing & blind spots | Getting around a double-parked truck: signal, shoulder check, wait for the other lane to clear, signal back |
 | 🚑 Emergency vehicles | Pulling to the right and stopping for an ambulance with its siren on, coming towards you or from behind |
@@ -54,14 +57,20 @@ Sixteen lessons, from your first drive to a final road test, in five real cities
 
 Mistakes are *minor* (−3), *major* (−10) or *critical* (fails the drive), and each comes with a tip written for new drivers. The coach is plain logic with no drawing, so all of it is unit-tested in Node.
 
-**Show me, then you try.** Every lesson has a **Show me first** button: a careful demo driver ([`js/school/autopilot.js`](js/school/autopilot.js)) drives it while a caption explains each move ("Stop sign ahead: braking early", "Siren! Pulling over to the right and stopping"). The coach grades the demo too, then the student drives the same route. The demo driver is also a test: Node runs it through all 16 lessons in all five cities, and it has to score 100.
+**Show me, then you try.** Every lesson has a **Show me first** button: a careful demo driver ([`js/school/autopilot.js`](js/school/autopilot.js)) drives it while a caption explains each move ("Stop sign ahead: braking early", "Siren! Pulling over to the right and stopping"). The coach grades the demo too, then the student drives the same route. The demo driver is also a test: Node runs it through all 19 lessons in all five cities, and it has to score 100.
 
 **Instant replay.** Every drive is recorded (the car, traffic, people and the light timing) and can be watched again afterwards, with each mistake marked on the timeline and a **Watch** button next to each mistake on the report card.
+
+**What to practice next.** After each drive, and on the lesson list, the app suggests a lesson from the mistakes that keep coming up in the latest drives (recent and serious ones count more): three rolling stops point to Stop signs, tailgating to the following drill. With nothing to work on, it suggests the next lesson.
+
+**Accessibility.** Larger text, a high-contrast dashboard, spoken directions and coaching (the browser's own voice, in English or Spanish), and shapes on traffic lights (square, triangle, circle) so color isn't the only clue.
+
+**Real speed limits.** Where OpenStreetMap has a posted limit (mph, or km/h converted), the coach and the speed limit sign use it; elsewhere, the lesson's. A street posted on only some of its pieces gets the limit along all of them.
 
 **For parents and teachers.** These need no accounts and no server:
 
 - **Progress report.** Lessons passed, practice time, recent drives, and the mistakes that keep coming up, each with a tip. It prints cleanly, and a student can send it as a link that carries the whole report.
-- **Class view** ([`class.html`](class.html)). A teacher pastes the students' links to see the class in one table, the mistakes most students make (to teach next), and how much scores went up from each student's first drives to their latest. It downloads as a spreadsheet. Nothing is uploaded. To try it with a group, see the [pilot study guide](docs/pilot-study.md).
+- **Class view** ([`class.html`](class.html)). A teacher pastes the students' links to see the class in one table, the mistakes most students make (to teach next), and how much scores went up from each student's first drives to their latest. It downloads as a spreadsheet. Nothing is uploaded. Teachers can also send **assignments**: a link to a lesson in a city with a note ("due Friday"), and the class view shows who has done each one, who started, and who hasn't yet. To try it with a group, see the [pilot study guide](docs/pilot-study.md).
 - **Permit test practice** ([`quiz.html`](quiz.html)). 40 rules-of-the-road questions (signs, signals, right-of-way, lane markings, safe driving), each with an explanation. It asks which state you live in, then adds questions on that state's teen driving laws only (the youngest age for a permit, how long to hold it, supervised hours, night and passenger limits), for all 50 states and DC, from the [IIHS licensing table](https://www.iihs.org/research-areas/teenagers/graduated-licensing-laws-table) ([`js/school/stateQuiz.js`](js/school/stateQuiz.js)).
 - **Supervised practice log** ([`log.html`](log.html)). Logs real drives with a parent toward the hours your state requires (pick it from all 50 states and DC; hours from the IIHS licensing table), including night hours and conditions. It suggests what to practice next, based on the student's simulator mistakes, and exports to CSV or print.
 - **Certificate and badges.** Passing the road test unlocks a printable practice certificate, and 15 badges reward milestones such as a clean drive, parallel parking, a whole Phone down lesson without touching the phone, a 90%+ permit quiz, or 5 logged real drives.
@@ -157,7 +166,7 @@ The longer version, with how each problem was found and fixed, is in [docs/engin
 - **Honest evaluation.** Picking the best checkpoint on the evaluation trips inflated the shipped brain's score from about 40% to 73%. The experiments report both numbers, plus a separate evaluator on fresh trips.
 - **Scaling the geometry.** Merging road shapes into one outline compared every road with every other, so the work grew quadratically. Bucketing shapes in a spatial grid means each road is only compared with its neighbours. Moving the build to a Web Worker keeps the page responsive while it runs.
 - **A bug the tests caught.** The original point-in-polygon check miscounted when its ray passed exactly through a corner. It was replaced with the crossing-number rule.
-- **A demo driver as a test harness.** Running the careful demo driver through every lesson in every city (160 drives, all now perfect) found real bugs that unit tests didn't: pedestrians walking into the side of stopped cars, two quick turns read as a wrong signal because the angle wrapped past 180°, parking spaces placed on bends, and a road curving round through a junction that the coach counted as a turn but the GPS never announced. Each is now a test.
+- **A demo driver as a test harness.** Running the careful demo driver through every lesson in every city (190 drives, all now perfect) found real bugs that unit tests didn't: pedestrians walking into the side of stopped cars, two quick turns read as a wrong signal because the angle wrapped past 180°, parking spaces placed on bends, and a road curving round through a junction that the coach counted as a turn but the GPS never announced. Each is now a test.
 - **Parallel parking by search.** The demo backs in on two arcs. Its settings (where to stop, how far out, the angle, when to straighten) came from a brute-force search over the maneuver with the real car physics, picking the one with the most clearance.
 - **Street names.** Each road piece keeps its OpenStreetMap name (or route number). The world follows each named street through its pieces and labels it about every 100 m, skipping labels that wouldn't fit or would crowd another; labels are flipped so they're never upside down, even though the Driving School camera turns with the car. The directions say which street you're on and which one you're turning onto. The bundled cities got their names afterwards from their original downloads ([`scripts/add-street-names.js`](scripts/add-street-names.js)), matched by the map node ids their roads still carry, so no road moved.
 - **Edges of a small area.** A place is downloaded as a circle, so every street crossing its edge was cut off there, and every cut end used to get a cul-de-sac. A small zip code ended up ringed by fake dead ends. Now roads come in 150 m past the area, cut ends are marked as map edges (no turnaround; traffic drives off and is recycled), and trips stay inside the area that was picked.

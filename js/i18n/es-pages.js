@@ -15,7 +15,7 @@ I18N.add("es", {
    "Score 80+ to pass": "Se aprueba con 80 o más",
    "Three ways to play": "Tres formas de jugar",
    "Drive yourself, watch a neural network learn, or design a city for both.": "Maneja tú, mira cómo aprende una red neuronal o diseña una ciudad para ambos.",
-   "Sixteen lessons, from your first drive to a full road test: intersections, roundabouts, school zones, parallel parking, ambulances, texts while driving, night and rain. A demo shows each one first, and a replay shows every mistake.": "Dieciséis lecciones, desde tu primer manejo hasta un examen completo: intersecciones, glorietas, zonas escolares, estacionarse en paralelo, ambulancias, mensajes al volante, noche y lluvia. Una demostración te enseña cada una primero, y una repetición te muestra cada error.",
+   "Nineteen lessons and drills, from your first drive to a full road test: intersections, roundabouts, highway merging, school zones, parallel parking, ambulances, texts while driving, night and rain. A demo shows each one first, and a replay shows every mistake.": "Diecinueve lecciones y prácticas, desde tu primer manejo hasta un examen completo: intersecciones, glorietas, incorporarte a la autopista, zonas escolares, estacionarse en paralelo, ambulancias, mensajes al volante, noche y lluvia. Una demostración te enseña cada una primero, y una repetición te muestra cada error.",
    "Start lesson 1 →": "Empezar la lección 1 →",
    "AI Lab": "Laboratorio de IA",
    "100 cars with tiny neural networks learn to drive by trial and error.": "100 autos con pequeñas redes neuronales aprenden a manejar a prueba y error.",

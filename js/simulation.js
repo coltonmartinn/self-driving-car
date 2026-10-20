@@ -173,10 +173,11 @@ class Simulation {
          car.update(others);
       }
       // keep traffic around the action: recycle cars that got lost or far away
+      // (not ones a lesson put there on purpose, keep = true, unless lost)
       if (this.frame % 30 == 0 && this.traffic.length > 0) {
          for (let i = 0; i < this.traffic.length; i++) {
             const t = this.traffic[i];
-            if (t.lost || distance(t, this.bestCar) > 3000) {
+            if (t.lost || (!t.keep && distance(t, this.bestCar) > 3000)) {
                const replacement = this.#spawnTrafficCar(this.bestCar, 1000, 2500, this.traffic);
                if (replacement) {
                   this.traffic[i] = replacement;

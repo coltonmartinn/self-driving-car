@@ -89,7 +89,7 @@ sets up a lesson the way the page does, on a real city map with traffic and
 pedestrians, and the demo has to finish with a perfect score.
 
 Running it through every lesson in all five cities, on two different trips
-each (now 160 drives, all perfect), found bugs that unit tests hadn't:
+each (now 190 drives, all perfect), found bugs that unit tests hadn't:
 
 - **Pedestrians walked into stopped cars.** The demo stopped at a crosswalk;
   the pedestrian kept walking and hit its side, which the coach scored as

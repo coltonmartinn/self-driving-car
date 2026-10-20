@@ -14,6 +14,7 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
    world.lightTiming = { green: 8, yellow: 3 };
    const lesson = LESSONS.find((l) => l.id == lessonId);
    if (lesson.roundabouts) world = DrivingSchool.roundaboutWorld(world);
+   if (lesson.highway) world = app.HighwayCourse.build();
    const controls = {
       forward: false, reverse: false, left: false, right: false, signal: null, looked: null, lookCount: 0,
       cancelSignal() { this.signal = null; },
@@ -26,12 +27,13 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
       autoArrive: !lesson.pullover && !lesson.parallel, trafficSpeed: [limit * pace[0], limit * pace[1]],
    });
    sim.manual = true;
-   if (!DrivingSchool.pickTrip(sim, lesson.route, 15)) throw new Error("no trip");
+   if (!DrivingSchool.pickTrip(sim, lesson.route, 15, lesson.stopMarks || 0)) throw new Error("no trip");
    sim.startGeneration();
    const car = DrivingSchool.setUpStudentCar(sim.cars[0], lesson);
    const extras = DrivingSchool.setUpLesson(sim, lesson);
    const coach = new DrivingCoach(world, car, {
       speedLimit: lesson.speedLimit, rules: lesson.rules, followSeconds: lesson.followSeconds || 2, zones: extras.zones,
+      marks: extras.marks, lead: extras.lead,
    });
    const phone = lesson.phone ? new app.PhoneBuzz({ forcedFirst: false }) : null; // the demo driver ignores texts
    let nextAmbulance = lesson.emergency ? 600 : Infinity;
@@ -52,6 +54,7 @@ function runLesson(lessonId, { city = "beverly-hills", seed = 1, maxFrames = 60 
             nextAmbulance = coach.frame + 60;
          }
       }
+      if (extras.lead) app.Drills.paceLead(extras.lead, coach.frame, (coach.limitAt(extras.lead) / DrivingCoach.MPH_PER_UNIT) * app.Drills.LEAD_PACE);
       const line = pilot.update(turns);
       if (line) said.push(line.title);
       sim.step();

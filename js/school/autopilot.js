@@ -74,7 +74,7 @@ class Autopilot {
          }
       }
       if (this.frame == 1) {
-         say("start", "Easing onto the gas", "Smooth and steady. I'll keep just under {limit} mph.", Infinity, { limit: this.lesson.speedLimit });
+         say("start", "Easing onto the gas", "Smooth and steady. I'll keep just under {limit} mph.", Infinity, { limit: this.coach.currentLimit });
       }
 
       // steer for a point ahead, in the right-hand lane. If that point is
@@ -84,7 +84,8 @@ class Autopilot {
          const at = Math.max(20, Math.min(loc.progress + look, route.length));
          const p = route.pointAt(at);
          const d = normalize(subtract(p, route.pointAt(at - 20)));
-         return { p, d, point: add(p, scale(perpendicular(d), rw / 4)) };
+         // (on the practice highway every lane is its own road: drive down its middle)
+         return { p, d, point: add(p, scale(perpendicular(d), this.world.highway ? 0 : rw / 4)) };
       };
       let look = 70 + Math.abs(car.speed) * 15;
       let ahead = aimAt(look);
@@ -97,7 +98,10 @@ class Autopilot {
       const p1 = ahead.p;
       const dir = ahead.d;
       let aim = ahead.point;
-      let target = (this.lesson.speedLimit - 3) / mph;
+      // just under the limit: the posted one here, or a lower one coming up
+      const posted = this.world.highway ? this.lesson.speedLimit
+         : Math.min(this.coach.currentLimit, this.coach.limitAt(route.pointAt(loc.progress + 140)));
+      let target = (posted - 3) / mph;
       this.why = "cruise"; // what's holding the speed down (for tests and debugging)
       const limit = (value, why) => {
          if (value < target) this.why = why;
@@ -206,12 +210,24 @@ class Autopilot {
          }
       }
 
+      // the highway: merge into a gap, pass slow trucks, take the exit
+      if (this.world.highway) {
+         const step = this.#highway(p1, dir, target, say);
+         if (step.aim) aim = step.aim;
+         if (step.raise) {
+            target = step.target;
+            this.why = step.why;
+         } else if (step.target != null) {
+            target = limit(step.target, step.why);
+         }
+      }
+
       const desired = -angle(subtract(aim, car)) - Math.PI / 2;
       let steer = desired - car.angle;
       steer = Math.atan2(Math.sin(steer), Math.cos(steer));
 
       // turns: signal early, slow down before the corner
-      const next = turns.find((t) => !t.roundabout && t.at > loc.progress - 10);
+      const next = turns.find((t) => !t.roundabout && !t.kind && t.at > loc.progress - 10);
       if (next && next.at - loc.progress < 200) target = limit(1.1, "turn");
       if (Math.abs(steer) > 0.35) target = limit(0.9, "steering");
       // bends in the road (not just turns at junctions): slow down before them
@@ -224,10 +240,22 @@ class Autopilot {
             "About 100 feet before the corner, and slowing down before it, not in it.");
       }
 
+      // the stopping drill: stop with the bumper right on each line
+      for (const m of this.coach.marks) {
+         if (m.judged) continue;
+         // (ours only: in our lane, facing our way)
+         if (dot(heading, m.dir) < 0.6 || Math.abs(dot(subtract(car, m.center), perpendicular(m.dir))) > rw / 2) continue;
+         const gap = Drills.distanceToMark(car, m);
+         if (gap < -20 || gap > 320) continue;
+         say(m, "Stopping mark ahead: braking early and gently", "Eyes on the line, and ease off the brake right at the end.");
+         target = limit(gap < 12 ? 0 : gap / 60, "stop mark");
+      }
+
       // signs and signals
       for (const m of this.coach.controls) {
          const gap = this.coach.lineDistance(m);
-         if (gap == null || gap < 0 || gap > 220) continue;
+         // (past a roundabout's YIELD line, keep looking until we're in the ring)
+         if (gap == null || gap < (m instanceof Yield ? -90 : 0) || gap > 220) continue;
          if (m instanceof Stop && !this.served.has(m)) {
             say(m, "Stop sign ahead: braking early", "So the car stops smoothly, behind the white line.");
             target = limit(gap < 12 ? 0 : gap / 60, "stop sign");
@@ -246,7 +274,7 @@ class Autopilot {
             const rb = Roundabouts.at(this.world, m.center, 200);
             if (rb && Roundabouts.trafficComing(rb, m.center, this.sim.traffic, { window: 1.6, roadWidth: rw })) {
                say("yield" + this.#key(m), "Car coming round: waiting at the yield line", "It has the right of way. We go when there's a gap.", 600);
-               target = limit(gap < 12 ? 0 : gap / 60, "yield");
+               target = limit(gap < 12 ? 0 : gap / 60, "yield"); // (past the line: stop right here)
                this.waitedAtYield = m;
             } else if (this.waitedAtYield == m) {
                say("gap" + this.#key(m), "There's our gap: in we go", "Turning right onto the ring.");
@@ -291,13 +319,30 @@ class Autopilot {
       }
 
       // other cars: keep a safe gap, and never drive into someone's path
+      // (on the highway, "ahead" means in the lane we're in or moving into)
+      const myLane = this.#highwayLane();
       for (const t of this.sim.traffic) {
-         const rel = subtract(t, car);
-         const along = dot(rel, heading);
-         const lateral = Math.abs(rel.x * heading.y - rel.y * heading.x);
-         if (along > 0 && along < 350 && lateral < 30) {
+         let along;
+         let lateral;
+         if (myLane) {
+            // the lane by where it is (before the merge point too), the gap along the road;
+            // on the ramp, until just before the merge, the merge plan picks the gap
+            const hw = this.world.highway.east;
+            const theirs = Math.abs(t.y - hw.right) < 35 ? "right" : Math.abs(t.y - hw.left) < 35 ? "left" : null;
+            if (theirs != myLane || (!this.merged && car.x < HighwayCourse.MERGE_X - 300)) continue;
+            along = t.x - car.x;
+            lateral = 0;
+         } else {
+            const rel = subtract(t, car);
+            along = dot(rel, heading);
+            lateral = Math.abs(rel.x * heading.y - rel.y * heading.x);
+         }
+         // (further ahead at speed; the drill's lead car even round a bend)
+         if (along > 0 && along < Math.max(350, car.speed * 200) && lateral < (t == this.coach.lead ? 60 : 30)) {
             // the lesson's following distance (2 s, or 3 at night), plus a margin
-            const safe = Math.max(0, (along - 80) / (60 * (this.coach.followSeconds + 0.5)));
+            let safe = Math.max(0, (along - 80) / (60 * (this.coach.followSeconds + 0.5)));
+            // on the highway, a car pulling away just means easing off, not braking
+            if (this.world.highway && along > 100 && t.speed > car.speed) safe = Math.max(safe, t.speed - 0.8);
             if (safe < target) {
                target = limit(safe, "car ahead");
                if (t.controls.reverse && t.hazardBrake > 0) {
@@ -388,6 +433,191 @@ class Autopilot {
       }
       this.why = "parking: " + this.parking;
       return line;
+   }
+
+   // The highway, one step at a time. Returns { aim, target, why } (any can be
+   // left out): where to steer and how fast to go.
+   #highway(p1, dir, target, say) {
+      const car = this.car;
+      const controls = this.controls;
+      const H = HighwayCourse;
+      const hw = this.world.highway;
+      const here = H.laneAt(this.world, car);
+      const laneOf = (t) => H.laneAt(this.world, t)?.lane;
+      const inLane = (lane, x) => add(new Point(x, hw.east[lane]), new Point(0, 0));
+      const out = {};
+      const clear = (lane, behind, ahead) => this.sim.traffic.every((t) => {
+         if (laneOf(t) != lane) return true;
+         const rel = t.x - car.x;
+         const closing = Math.max(0, t.speed - car.speed);
+         return rel < -(behind + closing * 120) || rel > ahead;
+      });
+      const look = Math.max(80, car.speed * 25);
+      const room = car.speed * 60 * 2.2; // a 2-second gap, and a bit, ahead of where we move to
+
+      // on the ramp: speed up, signal, look, and find a gap
+      if (!this.merged) {
+         if (here && here.lane == "right" && Math.abs(here.offset) < 30) {
+            this.merged = true;
+            controls.signal = null;
+            say("merged", "Merged. Signal off, settling into the lane", "Now match the traffic and keep 2+ seconds behind.");
+         } else if (car.x < H.MERGE_X && !(here && here.lane == "right" && Math.abs(here.offset) < 40)) {
+            const toMerge = H.MERGE_X - car.x;
+            if (toMerge < 1600) {
+               controls.signal = "left";
+               say("ramp", "On-ramp: speeding up to match traffic", "Signal left, look over my left shoulder, and find a gap.");
+            }
+            if (toMerge < 800) this.#look("left", "merge");
+            // pick a gap: the fastest speed (up to the limit) at which, when we
+            // reach the merge point, nobody in the right lane is too close
+            // ahead (1.8 s) or closing in too close behind
+            const rightLane = this.sim.traffic.filter((t) => Math.abs(t.y - hw.east.right) < 30 && t.x < H.MERGE_X + 2500);
+            const top = this.lesson.speedLimit / DrivingCoach.MPH_PER_UNIT;
+            let pick = null;
+            for (const v of [top, top - 0.3, top - 0.6, top - 0.9, 3.05]) {
+               const when = toMerge / v;
+               // (a plan already made only needs to nearly fit: no flip-flopping)
+               const margin = v == this.mergePick ? 50 : 90;
+               const fits = rightLane.every((t) => {
+                  const at = t.x + t.speed * when - H.MERGE_X; // + = ahead of the merge point
+                  return at >= 0 ? at > v * 60 * 2.2 + margin - 30 : -at > Math.max(0, t.speed - v) * 60 * 1.5 + margin;
+               });
+               if (fits) {
+                  pick = v;
+                  break;
+               }
+            }
+            if (pick == null) {
+               // no gap at any speed. If every car in the way is a slower one
+               // we'd be ahead of, go at the limit and merge ahead; otherwise
+               // drop in behind the one in the way ahead
+               const when = toMerge / top;
+               const inTheWay = rightLane.map((t) => ({ t, at: t.x + t.speed * when - H.MERGE_X })).filter(({ at }) => Math.abs(at) < top * 60 * 2.2 + 90);
+               const ahead = inTheWay.filter(({ at, t }) => at >= -60 || t.speed >= car.speed - 0.3).sort((a, b) => a.at - b.at);
+               pick = ahead.length == 0 ? top : Math.max(2.8, ahead[0].t.speed - 0.8);
+            }
+            this.mergePick = pick; // (for tests and debugging)
+            if (toMerge < 2200 && rightLane.length > 0) {
+               out.target = pick;
+               out.why = "merge gap";
+               out.raise = true; // (may be a little over our usual cruise, up to the limit)
+               if (pick == null || pick < top - 0.5) {
+                  say("mergegap", "Easing off to slot in behind a car", "Never force your way in. Pick a gap and match its speed.");
+               } else if (pick > top - 0.2) {
+                  say("mergeahead", "Speeding up to the limit to merge into the gap", "Use the ramp to match the speed of traffic.");
+               }
+            }
+         }
+         return out;
+      }
+
+      // passing a slow truck: signal, look, move over, pass, signal, look, back
+      const pass = this.hwPass;
+      const left = (x) => inLane("left", x);
+      if (!pass && here && here.lane == "right" && car.x < H.EXIT_X - 6000) {
+         // anything in our lane going well under our speed (like a slow truck)
+         const cruise = (this.lesson.speedLimit - 3) / DrivingCoach.MPH_PER_UNIT;
+         const truck = this.sim.traffic.find((t) => laneOf(t) == "right" && t.x > car.x && t.x - car.x < 650 && t.speed < cruise - 0.45);
+         if (truck && clear("left", 500, room)) {
+            this.hwPass = { phase: "signal", frames: 0, truck };
+            say("pass" + this.#key(truck), truck.isTruck ? "Slow truck ahead: signaling left to pass" : "Slow car ahead: signaling left to pass",
+               "Signal, mirror, then a look over my left shoulder before moving over.");
+         }
+      }
+      // off the highway (on the exit ramp): no pass to finish
+      if (this.hwPass && !here) {
+         this.hwPass = null;
+         controls.signal = null;
+      }
+      // the exit is coming: finish any pass now (or don't start it)
+      if (this.hwPass && car.x > H.EXIT_X - 3500) {
+         const p = this.hwPass;
+         if (p.phase == "signal") {
+            controls.signal = null;
+            this.hwPass = null;
+         } else if (p.phase == "out" || p.phase == "pass") {
+            p.phase = "back";
+            p.frames = 0;
+            say("back" + this.#key(p.truck), "Exit coming up: signaling right to move back", "Plan ahead: be in the right lane well before your exit.");
+         }
+      }
+      if (this.hwPass) {
+         const p = this.hwPass;
+         p.frames++;
+         if (p.phase == "signal") {
+            controls.signal = "left";
+            if (p.frames > 40) this.#look("left", "out" + this.#key(p.truck));
+            if (p.frames > 110) {
+               if (clear("left", 500, room)) {
+                  p.phase = "out";
+                  this.#look("left", "go" + this.#key(p.truck)); // one more look, right as we move
+                  say("out" + this.#key(p.truck), "Left lane's clear: moving over", "Smoothly, over a couple of seconds.");
+               } else {
+                  p.frames = 60; // wait for the gap, still signaling
+               }
+            }
+         } else if (p.phase == "out") {
+            controls.signal = "left";
+            out.aim = left(car.x + look);
+            if (here && here.lane == "left" && Math.abs(here.offset) < 10) {
+               p.phase = "pass";
+               controls.signal = null;
+            }
+         } else if (p.phase == "pass") {
+            out.aim = left(car.x + look);
+            if (car.x - p.truck.x > p.truck.height + 220) {
+               p.phase = "back";
+               p.frames = 0;
+               say("back" + this.#key(p.truck), "Past the truck: signaling right to move back", "I can see it in my mirror. A look over my right shoulder, then over.");
+            }
+         } else if (p.phase == "back") {
+            out.aim = left(car.x + look);
+            controls.signal = "right";
+            if (p.frames > 40) this.#look("right", "back" + this.#key(p.truck));
+            if (p.frames > 110 && clear("right", 350, room)) {
+               p.phase = "return";
+               this.#look("right", "in" + this.#key(p.truck)); // one more look, right as we move
+            } else if (p.frames > 240) {
+               // no gap yet: ease off so one opens up beside us (more so
+               // with the exit coming)
+               out.target = car.x > H.EXIT_X - 3000 ? 2.6 : 3.05;
+               out.why = "finding a gap";
+               say("gap" + this.#key(p.truck), "No gap yet: easing off to find one", "Don't force it. Let the car beside you go ahead.");
+            }
+         } else if (p.phase == "return") {
+            controls.signal = "right";
+            if (here && here.lane == "right" && Math.abs(here.offset) < 10) {
+               controls.signal = null;
+               this.hwPass = null;
+            }
+         }
+         return out;
+      }
+
+      // the exit: signal early, then slow down on the ramp (not on the highway)
+      const toExit = H.EXIT_X - car.x;
+      if (toExit < 1500 && toExit > -60) {
+         controls.signal = "right";
+         say("exit", "Our exit is coming up: signaling right", "Keep up with traffic until we're on the ramp, then slow down.");
+         if (toExit < 700) this.#look("right", "exit");
+      } else if (toExit <= -60 && !here) {
+         out.target = 2.4;
+         out.why = "exit ramp";
+         say("ramp-out", "On the exit ramp: now we slow down", "Watch for the speed limit dropping at the end of the ramp.");
+      }
+      return out;
+   }
+
+   // The highway lane we're in or moving into (on the ramp: the right lane),
+   // or null when that doesn't apply
+   #highwayLane() {
+      if (!this.world.highway) return null;
+      const phase = this.hwPass && this.hwPass.phase;
+      if (phase == "out" || phase == "pass" || phase == "back") return "left";
+      if (phase == "return") return "right";
+      const here = HighwayCourse.laneAt(this.world, this.car);
+      if (here) return here.lane;
+      return this.car.x < HighwayCourse.MERGE_X ? "right" : null; // (off the highway, on the exit: any car ahead counts)
    }
 
    // A parked vehicle in our lane ahead, on the route

@@ -9,6 +9,15 @@ const Osm = {
 
    UNITS_PER_METER: 10, // 10 world units = 1 m (roads are 140 units = 14 m wide)
 
+   // A posted speed limit in mph, from an OpenStreetMap maxspeed tag ("25 mph",
+   // or plain km/h like "50"), or null
+   speedLimit(tag) {
+      const m = String(tag || "").trim().match(/^(\d+(?:\.\d+)?)\s*(mph|km\/h|kmh|kph)?$/i);
+      if (!m) return null;
+      const value = Number(m[1]);
+      return m[2] && m[2].toLowerCase() == "mph" ? Math.round(value) : Math.round(value * 0.621371);
+   },
+
    // Flat-earth projection around (lat0, lon0); fine for a few kilometers
    projection(lat0, lon0) {
       const k = Osm.UNITS_PER_METER;
@@ -79,6 +88,7 @@ const Osm = {
          const reversed = tags.oneway == "-1";
          // the street's name (or its route number, like "US 101")
          const name = tags.name || tags.ref || null;
+         const limit = Osm.speedLimit(tags.maxspeed);
 
          for (let i = 1; i < way.nodes.length; i++) {
             let a = getPoint(way.nodes[i - 1]);
@@ -91,7 +101,9 @@ const Osm = {
             const key = a.id < b.id ? a.id + "-" + b.id : b.id + "-" + a.id;
             if (seen.has(key)) continue;
             seen.add(key);
-            segments.push(new Segment(a, b, oneWay, name));
+            const seg = new Segment(a, b, oneWay, name);
+            if (limit) seg.speedLimit = limit;
+            segments.push(seg);
          }
       }
 

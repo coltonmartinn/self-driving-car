@@ -5,8 +5,10 @@ const Progress = {
    MAX_HISTORY: 200,
 
    // One finished (or abandoned) drive, as stored in the history
-   record(lesson, summary, { ended, city, date = Date.now() }) {
+   // (assignment: the id of the teacher's assignment it was for, if any)
+   record(lesson, summary, { ended, city, date = Date.now(), assignment = null }) {
       return {
+         ...(assignment ? { assignment } : {}),
          lesson: lesson.id,
          city,
          date,
@@ -17,6 +19,58 @@ const Progress = {
          minutes: Math.round(summary.minutes * 10) / 10,
          mistakes: summary.mistakes.map((m) => m.rule),
       };
+   },
+
+   // The lesson that practices the skill behind each mistake
+   PRACTICE: {
+      rolling_stop: "stops", ran_stop: "stops",
+      red_light: "lights",
+      no_signal: "signals", wrong_signal: "signals",
+      tailgating: "gapdrill", uneven_gap: "gapdrill", fell_behind: "gapdrill",
+      overshot_mark: "stopdrill", short_of_mark: "stopdrill", missed_mark: "stopdrill", slow_approach: "stopdrill",
+      pedestrian_yield: "pedestrians", hit_pedestrian: "pedestrians",
+      school_zone_speeding: "school",
+      speeding: "basics", reckless_speed: "basics", wrong_side: "basics", curb: "basics", wrong_way: "signals",
+      missed_spot: "pullover", crooked_park: "pullover", pullover_signal: "pullover",
+      far_from_curb: "parallel", too_many_moves: "parallel", park_signal: "parallel",
+      pass_no_signal: "passing", pass_return_signal: "passing", unsafe_pass: "passing", no_blind_spot_check: "passing",
+      merge_slow: "highway", merge_signal: "highway", unsafe_merge: "highway", lane_change_signal: "highway",
+      unsafe_lane_change: "highway", straddling: "highway", too_slow_highway: "highway", exit_signal: "highway",
+      roundabout_no_yield: "roundabouts", roundabout_wrong_way: "roundabouts", roundabout_exit_signal: "roundabouts", fast_yield: "roundabouts",
+      emergency_yield: "emergency",
+      phone_use: "phone",
+      crash: "hazards",
+   },
+
+   // What to practice next: the lesson for the skill that slipped most in the
+   // latest drives (recent and serious mistakes count more), or, with nothing
+   // to work on, the next lesson not passed yet. Returns { lesson, rule,
+   // count, reason: "mistake" | "next" }, or null when everything's passed
+   // and clean.
+   recommend(history, lessons, rules, recent = 10) {
+      const drives = history.slice(-recent);
+      const weight = { critical: 3, major: 2, minor: 1 };
+      const scores = new Map();
+      const counts = new Map();
+      drives.forEach((d, i) => {
+         const fresh = 0.5 + (0.5 * (i + 1)) / drives.length; // the latest count most
+         for (const rule of d.mistakes) {
+            const info = rules[rule];
+            const lesson = lessons.find((l) => l.id == Progress.PRACTICE[rule]);
+            if (!info || !lesson) continue;
+            scores.set(rule, (scores.get(rule) || 0) + (weight[info.severity] || 0) * fresh);
+            counts.set(rule, (counts.get(rule) || 0) + 1);
+         }
+      });
+      // one minor slip isn't a pattern: it takes a few, or something serious
+      const best = [...scores].filter(([, score]) => score >= 2).sort((a, b) => b[1] - a[1])[0];
+      if (best) {
+         const [rule] = best;
+         return { lesson: lessons.find((l) => l.id == Progress.PRACTICE[rule]), rule, count: counts.get(rule), reason: "mistake" };
+      }
+      const passed = new Set(history.filter((d) => d.passed).map((d) => d.lesson));
+      const next = lessons.find((l) => !passed.has(l.id));
+      return next ? { lesson: next, rule: null, count: 0, reason: "next" } : null;
    },
 
    add(history, drive) {
@@ -123,6 +177,36 @@ const Progress = {
       return [header, ...lines].map((l) => l.map(cell).join(",")).join("\n") + "\n";
    },
 
+   // ---------- assignments ----------
+
+   // A link a teacher sends: a lesson in a city, with a note for the class
+   assignmentLink(base, { id, lesson, city, note = "" }) {
+      return base + "?city=" + encodeURIComponent(city) + "&lesson=" + encodeURIComponent(lesson) + "&assign=" + encodeURIComponent(id) +
+         (note ? "&note=" + encodeURIComponent(note.slice(0, 120)) : "");
+   },
+
+   // A short id for a new assignment
+   assignmentId(random = Math.random) {
+      return Math.floor(random() * 36 ** 6).toString(36).padStart(6, "0");
+   },
+
+   // Who has done each assignment, from the students' reports: passed it,
+   // tried it, or not started. assignments: [{ id, ... }]
+   assignmentStatus(students, assignments) {
+      return assignments.map((a) => {
+         const drives = (s) => s.history.filter((d) => d.assignment == a.id);
+         const done = students.filter((s) => drives(s).some((d) => d.passed));
+         const tried = students.filter((s) => !done.includes(s) && drives(s).length > 0);
+         const name = (s) => s.name || "Unnamed student";
+         return {
+            ...a,
+            done: done.map(name),
+            tried: tried.map(name),
+            notYet: students.filter((s) => !done.includes(s) && !tried.includes(s)).map(name),
+         };
+      });
+   },
+
    // Pulls the report data out of a pasted share link (or the bare code)
    fromLink(text) {
       const match = text.trim().match(/#report=([A-Za-z0-9_-]+)/) || text.trim().match(/^([A-Za-z0-9_-]{20,})$/);
@@ -134,6 +218,7 @@ const Progress = {
    encode(name, history, quiz = null) {
       const rows = history.slice(-60).map((d) => [
          d.lesson, d.city, Math.round(d.date / 60000), d.ended[0], d.score, d.grade, d.passed ? 1 : 0, d.minutes, d.mistakes,
+         ...(d.assignment ? [d.assignment] : []),
       ]);
       const json = JSON.stringify({ v: 1, n: name, h: rows, q: quiz ? [quiz.best, quiz.passedFull ? 1 : 0] : null });
       const bytes = new TextEncoder().encode(json);
@@ -150,8 +235,9 @@ const Progress = {
       return {
          name: data.n || "",
          quiz: data.q ? { best: data.q[0], passedFull: data.q[1] == 1 } : null,
-         history: data.h.map(([lesson, city, minute, end, score, grade, passed, minutes, mistakes]) => ({
+         history: data.h.map(([lesson, city, minute, end, score, grade, passed, minutes, mistakes, assignment]) => ({
             lesson, city, date: minute * 60000, ended: ended[end], score, grade, passed: passed == 1, minutes, mistakes,
+            ...(assignment ? { assignment } : {}),
          })),
       };
    },

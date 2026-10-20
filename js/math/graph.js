@@ -8,12 +8,11 @@ class Graph {
       const points = info.points.map((i) => new Point(i.x, i.y));
       // lookup by coordinates so segments share the same Point objects
       const byKey = new Map(points.map((p) => [p.x + "," + p.y, p]));
-      const segments = info.segments.map((i) => new Segment(
-         byKey.get(i.p1.x + "," + i.p1.y),
-         byKey.get(i.p2.x + "," + i.p2.y),
-         i.oneWay,
-         i.name
-      ));
+      const segments = info.segments.map((i) => {
+         const seg = new Segment(byKey.get(i.p1.x + "," + i.p1.y), byKey.get(i.p2.x + "," + i.p2.y), i.oneWay, i.name);
+         if (i.speedLimit) seg.speedLimit = i.speedLimit;
+         return seg;
+      });
       return new Graph(points, segments);
    }
 

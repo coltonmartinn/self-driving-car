@@ -33,6 +33,9 @@ class World {
       this.laneGuides = null; // computed on demand, see getLaneGuides()
       this.streetLabels = null; // computed on demand, see getStreetLabels()
       this.mapEdges = new Set(); // road ends where the map was cut off (see #findMapEdges)
+      this.edgePoints = null; // points a world says run off the map (e.g. the practice highway)
+      this.laneLines = []; // dashed lines between lanes going the same way (the practice highway)
+      this.highway = null; // the practice highway's layout (see HighwayCourse)
 
       this.markings = [];
 
@@ -85,6 +88,7 @@ class World {
          );
          world.culDeSacs = (info.culDeSacs || []).map(loadPoint);
          world.#findMapEdges();
+         World.fillSpeedLimits(world.graph);
          world.laneGuides = null;
          world.lightGroups = null;
          world.#computeIntersections();
@@ -146,6 +150,7 @@ class World {
          (seg) => new Envelope(seg, this.roadWidth, this.roadRoundness)
       );
       this.#findMapEdges();
+      World.fillSpeedLimits(this.graph);
       this.culDeSacs = this.#findCulDeSacs();
       for (const center of this.culDeSacs) {
          this.envelopes.push(Envelope.circle(center, this.getCulDeSacRadius()));
@@ -161,10 +166,42 @@ class World {
       return this.roadWidth * 1.25;
    }
 
+   // Maps often post a street's limit on only some of its pieces: the others
+   // get it from the connected pieces of the same street (by name)
+   static fillSpeedLimits(graph) {
+      const byPoint = new Map();
+      for (const seg of graph.segments) {
+         if (!seg.name) continue;
+         for (const p of [seg.p1, seg.p2]) {
+            if (!byPoint.has(p)) byPoint.set(p, []);
+            byPoint.get(p).push(seg);
+         }
+      }
+      const queue = graph.segments.filter((s) => s.name && s.speedLimit);
+      while (queue.length > 0) {
+         const seg = queue.shift();
+         for (const p of [seg.p1, seg.p2]) {
+            for (const next of byPoint.get(p) || []) {
+               if (!next.speedLimit && next.name == seg.name) {
+                  next.speedLimit = seg.speedLimit;
+                  queue.push(next);
+               }
+            }
+         }
+      }
+   }
+
    // Real places are downloaded as a circle, so roads crossing its edge are
    // cut off there. Those ends aren't dead ends: the road runs on off the map.
+   // (A world can also list such points itself, in edgePoints.)
    #findMapEdges() {
       this.mapEdges = new Set();
+      if (this.edgePoints) {
+         const ends = new Set(this.edgePoints);
+         for (const p of this.graph.points) {
+            if (ends.has(p)) this.mapEdges.add(p);
+         }
+      }
       const place = this.place;
       if (this.source != "osm" || !place || !place.radius) {
          return;
@@ -643,6 +680,9 @@ class World {
          if (segInView(seg)) {
             seg.draw(ctx, { color: World.STYLE.edgeLine, width: 4 });
          }
+      }
+      for (const line of this.laneLines) {
+         line.draw(ctx, { color: World.STYLE.edgeLine, width: 4, dash: [30, 40] });
       }
 
       if (this.route) {

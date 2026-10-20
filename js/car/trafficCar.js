@@ -32,8 +32,10 @@ class TrafficNetwork {
       return { a: add(edge.from, shift), b: add(edge.to, shift), dir };
    }
 
+   // (never on a road marked noTraffic, like the practice highway's ramps)
    randomEdgeNear(point, minDist, maxDist) {
       const candidates = this.edges.filter((e) => {
+         if (e.seg.noTraffic) return false;
          const d = distance(average(e.from, e.to), point);
          return d >= minDist && d <= maxDist;
       });
@@ -73,6 +75,9 @@ class TrafficCar extends Car {
       this.plan = null; // graph points to drive through, in order (else random turns)
       this.passing = null; // a parked vehicle we're driving around
       this.siren = false;
+      this.keep = false; // placed by a lesson: not recycled when far away (see Simulation)
+      this.isLead = false; // the following drill's car to follow
+      this.isTruck = false; // a slow truck on the practice highway
    }
 
    heading() {
@@ -230,6 +235,7 @@ class TrafficCar extends Car {
       if (yieldTo) {
          targetSpeed = Math.min(targetSpeed, 0.6 * Math.max(0, (distance(yieldTo, pos) - 150) / 300)); // and stop
       }
+      targetSpeed = Math.min(targetSpeed, this.#courtesy(otherTraffic));
 
       // traffic lights and signs for our direction (only the nearest light
       // counts, like a driver watching the signal at the next stop line;
@@ -332,6 +338,26 @@ class TrafficCar extends Car {
       this.controls.right = diff < -0.02;
       this.controls.forward = this.speed < targetSpeed - 0.05;
       this.controls.reverse = this.speed > targetSpeed + 0.3 && this.speed > 0.25; // brake
+   }
+
+   // On the practice highway, be courteous like a real driver: ease off to let
+   // a student in, when they're merging from the ramp beside or just ahead of
+   // us, or signaling to move back into our lane. (Infinity: no need.)
+   #courtesy(otherTraffic) {
+      const world = this.network.world;
+      if (!world.highway || this.siren) return Infinity;
+      const right = world.highway.east.right;
+      if (Math.abs(this.y - right) > 30 || this.edge.to.x < this.edge.from.x) return Infinity; // only the eastbound right lane
+      for (const o of otherTraffic) {
+         if (!o.isPlayer) continue;
+         const rel = o.x - this.x;
+         if (rel < -40 || rel > 400) continue;
+         const merging = o.x < HighwayCourse.MERGE_X + 100 && o.y > right + 20 && HighwayCourse.MERGE_X - this.x < 2500;
+         const lane = HighwayCourse.laneAt(world, o);
+         const comingOver = lane && lane.lane == "left" && o.controls && o.controls.signal == "right";
+         if (merging || comingOver) return Math.max(1.5, Math.abs(o.speed) - 0.5);
+      }
+      return Infinity;
    }
 
    // A parked vehicle in our lane ahead that we can drive around now: the
